@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { slugify } from '@/lib/utils'
 import { toast } from '@/lib/hooks/use-toast'
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AppleWalletPreview, GoogleWalletPreview, type WalletCardData } from '@/components/wallet-preview/wallet-card-preview'
-import { Building2, MapPin, Palette, CheckCircle2, ChevronRight, ChevronLeft, Plus, Trash2 } from 'lucide-react'
+import { Building2, MapPin, Palette, CheckCircle2, ChevronRight, ChevronLeft, Plus, Trash2, Rocket } from 'lucide-react'
 
 const BUSINESS_TYPES = [
   { value: 'cafe', label: 'Cafe', emoji: '☕' },
@@ -31,7 +31,7 @@ const STEPS = [
   { label: 'Business', icon: Building2 },
   { label: 'Locations', icon: MapPin },
   { label: 'Card Design', icon: Palette },
-  { label: 'Done!', icon: CheckCircle2 },
+  { label: 'Go live!', icon: Rocket },
 ]
 
 interface Location {
@@ -41,24 +41,111 @@ interface Location {
   country: string
 }
 
-export default function OnboardingPage() {
+interface WizardData {
+  businessName: string
+  businessType: string
+  isMultiLocation: boolean
+  locations: Location[]
+  logoUrl: string
+  stripImageUrl: string
+  brandColor: string
+  secondaryColor: string
+  foregroundColor: string
+  labelColor: string
+  fontChoice: string
+  stampGoal: number
+  rewardDescription: string
+}
+
+const STORAGE_KEY = 'pending_onboarding'
+
+async function saveToDatabase(user: { id: string; email?: string; user_metadata?: { name?: string } }, data: WizardData) {
+  const supabase = createClient()
+  const slug = slugify(data.businessName) || `business-${Date.now()}`
+
+  const { data: business, error: bErr } = await supabase
+    .from('businesses')
+    .insert({
+      owner_id: user.id,
+      name: data.businessName,
+      slug,
+      type: data.businessType,
+      logo_url: data.logoUrl || null,
+      brand_color: data.brandColor,
+      secondary_color: data.secondaryColor,
+      background_image_url: data.stripImageUrl || null,
+      font_choice: data.fontChoice,
+      is_multi_location: data.isMultiLocation,
+      plan: 'free_trial',
+    })
+    .select()
+    .single()
+
+  if (bErr) throw bErr
+
+  const locData = data.locations.filter((l) => l.name).map((l) => ({
+    business_id: business.id,
+    name: l.name,
+    address: l.address || null,
+    city: l.city || null,
+    country: l.country || null,
+  }))
+
+  const { error: lErr } = await supabase.from('locations').insert(locData)
+  if (lErr) throw lErr
+
+  const { data: card, error: cErr } = await supabase
+    .from('loyalty_cards')
+    .insert({
+      business_id: business.id,
+      stamp_goal: data.stampGoal,
+      reward_description: data.rewardDescription,
+      card_scope: data.isMultiLocation ? 'all_locations' : 'per_location',
+      background_color: data.brandColor,
+      foreground_color: data.foregroundColor,
+      label_color: data.labelColor,
+      strip_image_url: data.stripImageUrl || null,
+      icon_url: data.logoUrl || null,
+    })
+    .select()
+    .single()
+
+  if (cErr) throw cErr
+
+  await supabase.from('employees').insert({
+    business_id: business.id,
+    user_id: user.id,
+    email: user.email!,
+    name: user.user_metadata?.name || null,
+    role: 'owner',
+  })
+
+  return card
+}
+
+function OnboardingInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const resume = searchParams.get('resume')
+
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
   const [qrUrl, setQrUrl] = useState('')
   const [passUrl, setPassUrl] = useState('')
+  const [showDone, setShowDone] = useState(false)
+  const [checkEmail, setCheckEmail] = useState(false)
 
-  // Step 1: Business info
+  // Step 0: Business info
   const [businessName, setBusinessName] = useState('')
   const [businessType, setBusinessType] = useState('cafe')
   const [isMultiLocation, setIsMultiLocation] = useState(false)
 
-  // Step 2: Locations
+  // Step 1: Locations
   const [locations, setLocations] = useState<Location[]>([
     { name: '', address: '', city: '', country: 'UK' },
   ])
 
-  // Step 3: Card design
+  // Step 2: Card design
   const [logoUrl, setLogoUrl] = useState('')
   const [stripImageUrl, setStripImageUrl] = useState('')
   const [brandColor, setBrandColor] = useState('#6366f1')
@@ -68,7 +155,45 @@ export default function OnboardingPage() {
   const [fontChoice, setFontChoice] = useState('inter')
   const [stampGoal, setStampGoal] = useState(10)
   const [rewardDescription, setRewardDescription] = useState('1 free item')
-  const [logoUploading, setLogoUploading] = useState(false)
+
+  // Step 3: Sign-up
+  const [signUpName, setSignUpName] = useState('')
+  const [signUpEmail, setSignUpEmail] = useState('')
+  const [signUpPassword, setSignUpPassword] = useState('')
+
+  const wizardData = (): WizardData => ({
+    businessName, businessType, isMultiLocation, locations,
+    logoUrl, stripImageUrl, brandColor, secondaryColor,
+    foregroundColor, labelColor, fontChoice, stampGoal, rewardDescription,
+  })
+
+  // Resume after email confirmation
+  useEffect(() => {
+    if (resume !== '1') return
+    const raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return
+
+    const supabase = createClient()
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return
+      try {
+        const data: WizardData = JSON.parse(raw)
+        const card = await saveToDatabase(user, data)
+        localStorage.removeItem(STORAGE_KEY)
+        const appUrl = window.location.origin
+        const samplePassUrl = `${appUrl}/pass/new?card=${card.id}`
+        setPassUrl(samplePassUrl)
+        const qrRes = await fetch(`/api/passes/qr?url=${encodeURIComponent(samplePassUrl)}`)
+        if (qrRes.ok) {
+          const { qrDataUrl } = await qrRes.json()
+          setQrUrl(qrDataUrl)
+        }
+        setShowDone(true)
+      } catch (err: unknown) {
+        toast({ title: (err as Error).message || 'Something went wrong', variant: 'destructive' })
+      }
+    })
+  }, [resume])
 
   const cardData: WalletCardData = {
     businessName,
@@ -86,118 +211,70 @@ export default function OnboardingPage() {
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setLogoUploading(true)
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { toast({ title: 'Create your account first to upload images', variant: 'destructive' }); return }
     const ext = file.name.split('.').pop()
     const path = `logos/${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('business-assets').upload(path, file)
-    if (error) {
-      toast({ title: 'Upload failed', variant: 'destructive' })
-    } else {
-      const { data } = supabase.storage.from('business-assets').getPublicUrl(path)
-      setLogoUrl(data.publicUrl)
-    }
-    setLogoUploading(false)
+    if (error) { toast({ title: 'Upload failed', variant: 'destructive' }); return }
+    const { data } = supabase.storage.from('business-assets').getPublicUrl(path)
+    setLogoUrl(data.publicUrl)
   }
 
   async function handleStripUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { toast({ title: 'Create your account first to upload images', variant: 'destructive' }); return }
     const ext = file.name.split('.').pop()
     const path = `strips/${Date.now()}.${ext}`
     const { error } = await supabase.storage.from('business-assets').upload(path, file)
-    if (error) {
-      toast({ title: 'Upload failed', variant: 'destructive' })
-    } else {
-      const { data } = supabase.storage.from('business-assets').getPublicUrl(path)
-      setStripImageUrl(data.publicUrl)
-    }
+    if (error) { toast({ title: 'Upload failed', variant: 'destructive' }); return }
+    const { data } = supabase.storage.from('business-assets').getPublicUrl(path)
+    setStripImageUrl(data.publicUrl)
   }
 
-  async function handleFinish() {
+  async function handleSignUpAndSave() {
+    if (signUpPassword.length < 8) {
+      toast({ title: 'Password must be at least 8 characters', variant: 'destructive' })
+      return
+    }
     setSaving(true)
     try {
+      const data = wizardData()
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
+
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
-
-      const slug = slugify(businessName) || `business-${Date.now()}`
-
-      // Create business
-      const { data: business, error: bErr } = await supabase
-        .from('businesses')
-        .insert({
-          owner_id: user.id,
-          name: businessName,
-          slug,
-          type: businessType,
-          logo_url: logoUrl || null,
-          brand_color: brandColor,
-          secondary_color: secondaryColor,
-          background_image_url: stripImageUrl || null,
-          font_choice: fontChoice,
-          is_multi_location: isMultiLocation,
-          plan: 'free_trial',
-        })
-        .select()
-        .single()
-
-      if (bErr) throw bErr
-
-      // Create locations
-      const locData = locations.filter((l) => l.name).map((l) => ({
-        business_id: business.id,
-        name: l.name,
-        address: l.address || null,
-        city: l.city || null,
-        country: l.country || null,
-      }))
-
-      const { error: lErr } = await supabase.from('locations').insert(locData)
-      if (lErr) throw lErr
-
-      // Create loyalty card
-      const { data: card, error: cErr } = await supabase
-        .from('loyalty_cards')
-        .insert({
-          business_id: business.id,
-          stamp_goal: stampGoal,
-          reward_description: rewardDescription,
-          card_scope: isMultiLocation ? 'all_locations' : 'per_location',
-          background_color: brandColor,
-          foreground_color: foregroundColor,
-          label_color: labelColor,
-          strip_image_url: stripImageUrl || null,
-          icon_url: logoUrl || null,
-        })
-        .select()
-        .single()
-
-      if (cErr) throw cErr
-
-      // Create owner employee record
-      await supabase.from('employees').insert({
-        business_id: business.id,
-        user_id: user.id,
-        email: user.email!,
-        name: user.user_metadata?.name || null,
-        role: 'owner',
+      const { data: authData, error } = await supabase.auth.signUp({
+        email: signUpEmail,
+        password: signUpPassword,
+        options: {
+          data: { name: signUpName },
+          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding?resume=1`,
+        },
       })
 
-      // Generate a sample pass URL for display on done screen
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || window.location.origin
-      const samplePassUrl = `${appUrl}/pass/new?card=${card.id}`
-      setPassUrl(samplePassUrl)
+      if (error) throw error
 
-      // Generate QR code via API
-      const qrRes = await fetch(`/api/passes/qr?url=${encodeURIComponent(samplePassUrl)}`)
-      if (qrRes.ok) {
-        const { qrDataUrl } = await qrRes.json()
-        setQrUrl(qrDataUrl)
+      if (authData.session && authData.user) {
+        // Email confirmation not required — save immediately
+        const card = await saveToDatabase(authData.user, data)
+        localStorage.removeItem(STORAGE_KEY)
+        const appUrl = window.location.origin
+        const samplePassUrl = `${appUrl}/pass/new?card=${card.id}`
+        setPassUrl(samplePassUrl)
+        const qrRes = await fetch(`/api/passes/qr?url=${encodeURIComponent(samplePassUrl)}`)
+        if (qrRes.ok) {
+          const { qrDataUrl } = await qrRes.json()
+          setQrUrl(qrDataUrl)
+        }
+        setShowDone(true)
+      } else {
+        // Email confirmation required
+        setCheckEmail(true)
       }
-
-      setStep(3)
     } catch (err: unknown) {
       toast({ title: (err as Error).message || 'Something went wrong', variant: 'destructive' })
     } finally {
@@ -222,6 +299,52 @@ export default function OnboardingPage() {
   const canProceedStep0 = businessName.trim().length >= 2
   const canProceedStep1 = locations.some((l) => l.name.trim().length >= 1)
   const canProceedStep2 = rewardDescription.trim().length >= 1 && stampGoal >= 1
+  const canProceedStep3 = signUpName.trim().length >= 1 && signUpEmail.includes('@') && signUpPassword.length >= 8
+
+  // Done screen
+  if (showDone) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full text-center slide-up">
+          <div className="text-6xl mb-4">🎉</div>
+          <h1 className="text-4xl font-bold text-gray-900 mb-3">You're live!</h1>
+          <p className="text-lg text-gray-500 mb-10">
+            Print this QR code and put it at your counter. Customers scan it to add their loyalty card to Apple or Google Wallet.
+          </p>
+          <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 inline-block mb-8">
+            {qrUrl ? (
+              <img src={qrUrl} alt="QR Code" className="w-56 h-56" />
+            ) : (
+              <div className="w-56 h-56 bg-gray-100 rounded-2xl animate-pulse flex items-center justify-center">
+                <span className="text-gray-400 text-sm">Generating QR…</span>
+              </div>
+            )}
+            <p className="text-sm text-gray-500 mt-4">Scan to add loyalty card to Wallet</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            {qrUrl && (
+              <a
+                href={qrUrl}
+                download="stamppass-qr.png"
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
+              >
+                Download QR code
+              </a>
+            )}
+            <Button variant="primary" size="lg" onClick={() => router.push('/dashboard')} className="gap-2">
+              Go to dashboard <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+          {passUrl && (
+            <p className="mt-6 text-sm text-gray-400">
+              Pass link:{' '}
+              <a href={passUrl} className="text-indigo-600 hover:underline break-all">{passUrl}</a>
+            </p>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50">
@@ -263,7 +386,7 @@ export default function OnboardingPage() {
         {step === 0 && (
           <div className="max-w-xl mx-auto slide-up">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Tell us about your business</h1>
-            <p className="text-gray-500 mb-8">This takes about 30 seconds.</p>
+            <p className="text-gray-500 mb-8">This takes about 30 seconds. No account needed yet.</p>
 
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-6">
               <div className="space-y-1.5">
@@ -326,13 +449,7 @@ export default function OnboardingPage() {
             </div>
 
             <div className="flex justify-end mt-6">
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => setStep(1)}
-                disabled={!canProceedStep0}
-                className="gap-2"
-              >
+              <Button variant="primary" size="lg" onClick={() => setStep(1)} disabled={!canProceedStep0} className="gap-2">
                 Next: Locations <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
@@ -353,11 +470,7 @@ export default function OnboardingPage() {
                       {isMultiLocation ? `Location ${idx + 1}` : 'Your location'}
                     </h3>
                     {isMultiLocation && locations.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeLocation(idx)}
-                        className="text-red-400 hover:text-red-600"
-                      >
+                      <button type="button" onClick={() => removeLocation(idx)} className="text-red-400 hover:text-red-600">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     )}
@@ -365,35 +478,19 @@ export default function OnboardingPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-1.5">
                       <Label>Location name</Label>
-                      <Input
-                        placeholder="e.g. Main Street Branch"
-                        value={loc.name}
-                        onChange={(e) => updateLocation(idx, 'name', e.target.value)}
-                      />
+                      <Input placeholder="e.g. Main Street Branch" value={loc.name} onChange={(e) => updateLocation(idx, 'name', e.target.value)} />
                     </div>
                     <div className="col-span-2 space-y-1.5">
                       <Label>Address (optional)</Label>
-                      <Input
-                        placeholder="123 Main Street"
-                        value={loc.address}
-                        onChange={(e) => updateLocation(idx, 'address', e.target.value)}
-                      />
+                      <Input placeholder="123 Main Street" value={loc.address} onChange={(e) => updateLocation(idx, 'address', e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>City</Label>
-                      <Input
-                        placeholder="London"
-                        value={loc.city}
-                        onChange={(e) => updateLocation(idx, 'city', e.target.value)}
-                      />
+                      <Input placeholder="London" value={loc.city} onChange={(e) => updateLocation(idx, 'city', e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Country</Label>
-                      <Input
-                        placeholder="UK"
-                        value={loc.country}
-                        onChange={(e) => updateLocation(idx, 'country', e.target.value)}
-                      />
+                      <Input placeholder="UK" value={loc.country} onChange={(e) => updateLocation(idx, 'country', e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -414,13 +511,7 @@ export default function OnboardingPage() {
               <Button variant="outline" size="lg" onClick={() => setStep(0)} className="gap-2">
                 <ChevronLeft className="w-4 h-4" /> Back
               </Button>
-              <Button
-                variant="primary"
-                size="lg"
-                onClick={() => setStep(2)}
-                disabled={!canProceedStep1}
-                className="gap-2"
-              >
+              <Button variant="primary" size="lg" onClick={() => setStep(2)} disabled={!canProceedStep1} className="gap-2">
                 Next: Design card <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
@@ -430,40 +521,25 @@ export default function OnboardingPage() {
         {/* Step 2: Card Design */}
         {step === 2 && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 slide-up">
-            {/* Left: controls */}
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Design your loyalty card</h1>
               <p className="text-gray-500 mb-6">Preview updates live as you type.</p>
 
               <div className="space-y-5">
-                {/* Stamp settings */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
                   <h3 className="font-semibold text-gray-900">Stamp settings</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label htmlFor="stamp-goal">Stamps needed</Label>
-                      <Input
-                        id="stamp-goal"
-                        type="number"
-                        min={1}
-                        max={30}
-                        value={stampGoal}
-                        onChange={(e) => setStampGoal(Number(e.target.value))}
-                      />
+                      <Input id="stamp-goal" type="number" min={1} max={30} value={stampGoal} onChange={(e) => setStampGoal(Number(e.target.value))} />
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="reward">Reward</Label>
-                      <Input
-                        id="reward"
-                        placeholder="1 free coffee"
-                        value={rewardDescription}
-                        onChange={(e) => setRewardDescription(e.target.value)}
-                      />
+                      <Input id="reward" placeholder="1 free coffee" value={rewardDescription} onChange={(e) => setRewardDescription(e.target.value)} />
                     </div>
                   </div>
                 </div>
 
-                {/* Colors */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
                   <h3 className="font-semibold text-gray-900">Colors</h3>
                   <div className="grid grid-cols-2 gap-4">
@@ -474,12 +550,7 @@ export default function OnboardingPage() {
                       { label: 'Secondary', value: secondaryColor, set: setSecondaryColor },
                     ].map(({ label, value, set }) => (
                       <div key={label} className="flex items-center gap-3">
-                        <input
-                          type="color"
-                          value={value}
-                          onChange={(e) => set(e.target.value)}
-                          className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5"
-                        />
+                        <input type="color" value={value} onChange={(e) => set(e.target.value)} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
                         <div>
                           <p className="text-xs text-gray-500">{label}</p>
                           <p className="text-sm font-mono">{value}</p>
@@ -489,7 +560,6 @@ export default function OnboardingPage() {
                   </div>
                 </div>
 
-                {/* Font */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
                   <h3 className="font-semibold text-gray-900">Font</h3>
                   <div className="grid grid-cols-5 gap-2">
@@ -499,9 +569,7 @@ export default function OnboardingPage() {
                         type="button"
                         onClick={() => setFontChoice(f.value)}
                         className={`py-2 px-1 rounded-xl border-2 text-sm transition-all ${f.style} ${
-                          fontChoice === f.value
-                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                            : 'border-gray-200 hover:border-gray-300'
+                          fontChoice === f.value ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
                         {f.label}
@@ -510,9 +578,8 @@ export default function OnboardingPage() {
                   </div>
                 </div>
 
-                {/* Images */}
                 <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-                  <h3 className="font-semibold text-gray-900">Images</h3>
+                  <h3 className="font-semibold text-gray-900">Images <span className="text-xs font-normal text-gray-400">(available after sign-up)</span></h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label>Logo</Label>
@@ -520,10 +587,7 @@ export default function OnboardingPage() {
                         {logoUrl ? (
                           <img src={logoUrl} alt="Logo" className="h-full object-contain rounded-xl" />
                         ) : (
-                          <>
-                            <span className="text-xl">🖼️</span>
-                            <span>{logoUploading ? 'Uploading…' : 'Upload logo'}</span>
-                          </>
+                          <><span className="text-xl">🖼️</span><span>Upload logo</span></>
                         )}
                         <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                       </label>
@@ -534,10 +598,7 @@ export default function OnboardingPage() {
                         {stripImageUrl ? (
                           <img src={stripImageUrl} alt="Strip" className="h-full w-full object-cover rounded-xl" />
                         ) : (
-                          <>
-                            <span className="text-xl">🌄</span>
-                            <span>Upload strip</span>
-                          </>
+                          <><span className="text-xl">🌄</span><span>Upload strip</span></>
                         )}
                         <input type="file" accept="image/*" className="hidden" onChange={handleStripUpload} />
                       </label>
@@ -550,19 +611,12 @@ export default function OnboardingPage() {
                 <Button variant="outline" size="lg" onClick={() => setStep(1)} className="gap-2">
                   <ChevronLeft className="w-4 h-4" /> Back
                 </Button>
-                <Button
-                  variant="primary"
-                  size="lg"
-                  onClick={handleFinish}
-                  disabled={!canProceedStep2 || saving}
-                  className="gap-2"
-                >
-                  {saving ? 'Setting up…' : 'Finish setup'} <ChevronRight className="w-4 h-4" />
+                <Button variant="primary" size="lg" onClick={() => setStep(3)} disabled={!canProceedStep2} className="gap-2">
+                  Looks good! <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
             </div>
 
-            {/* Right: live preview */}
             <div className="lg:sticky lg:top-8 self-start space-y-6">
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Apple Wallet</p>
@@ -576,59 +630,89 @@ export default function OnboardingPage() {
           </div>
         )}
 
-        {/* Step 3: Done */}
-        {step === 3 && (
-          <div className="max-w-2xl mx-auto text-center slide-up">
-            <div className="text-6xl mb-4">🎉</div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-3">You're live!</h1>
-            <p className="text-lg text-gray-500 mb-10">
-              Print this QR code and put it at your counter. Customers scan it to add their loyalty card to Apple
-              or Google Wallet.
-            </p>
-
-            {/* QR Code */}
-            <div className="bg-white rounded-3xl shadow-lg border border-gray-100 p-8 inline-block mb-8">
-              {qrUrl ? (
-                <img src={qrUrl} alt="QR Code" className="w-56 h-56" />
-              ) : (
-                <div className="w-56 h-56 bg-gray-100 rounded-2xl animate-pulse flex items-center justify-center">
-                  <span className="text-gray-400 text-sm">Generating QR…</span>
-                </div>
-              )}
-              <p className="text-sm text-gray-500 mt-4">Scan to add loyalty card to Wallet</p>
+        {/* Step 3: Create account */}
+        {step === 3 && !checkEmail && (
+          <div className="max-w-md mx-auto slide-up">
+            <div className="text-center mb-8">
+              <div className="text-5xl mb-3">🚀</div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">Your card is ready!</h1>
+              <p className="text-gray-500">Create a free account to go live. Takes 10 seconds.</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              {qrUrl && (
-                <a
-                  href={qrUrl}
-                  download="stamppass-qr.png"
-                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gray-900 text-white font-medium hover:bg-gray-800 transition-colors"
-                >
-                  Download QR code
-                </a>
-              )}
+            {/* Card preview summary */}
+            <div className="bg-indigo-50 rounded-2xl p-4 mb-6 flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl flex-shrink-0" style={{ backgroundColor: brandColor }} />
+              <div>
+                <p className="font-semibold text-gray-900">{businessName}</p>
+                <p className="text-sm text-gray-500">{stampGoal} stamps → {rewardDescription}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStep(2)}
+                className="ml-auto text-xs text-indigo-600 hover:underline"
+              >
+                Edit
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="su-name">Your name</Label>
+                <Input id="su-name" placeholder="Jane Smith" value={signUpName} onChange={(e) => setSignUpName(e.target.value)} autoFocus />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="su-email">Email address</Label>
+                <Input id="su-email" type="email" placeholder="jane@example.com" value={signUpEmail} onChange={(e) => setSignUpEmail(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="su-password">Password</Label>
+                <Input id="su-password" type="password" placeholder="At least 8 characters" value={signUpPassword} onChange={(e) => setSignUpPassword(e.target.value)} />
+              </div>
+
               <Button
                 variant="primary"
                 size="lg"
-                onClick={() => router.push('/dashboard')}
-                className="gap-2"
+                className="w-full gap-2 mt-2"
+                disabled={!canProceedStep3 || saving}
+                onClick={handleSignUpAndSave}
               >
-                Go to dashboard <ChevronRight className="w-4 h-4" />
+                {saving ? 'Setting up…' : 'Create account & go live'} <Rocket className="w-4 h-4" />
               </Button>
+
+              <p className="text-center text-xs text-gray-400">
+                Already have an account?{' '}
+                <a href="/login" className="text-indigo-600 hover:underline">Sign in</a>
+              </p>
             </div>
 
-            {passUrl && (
-              <p className="mt-6 text-sm text-gray-400">
-                Pass link:{' '}
-                <a href={passUrl} className="text-indigo-600 hover:underline break-all">
-                  {passUrl}
-                </a>
-              </p>
-            )}
+            <div className="flex justify-start mt-4">
+              <Button variant="ghost" size="sm" onClick={() => setStep(2)} className="gap-1 text-gray-400">
+                <ChevronLeft className="w-3 h-3" /> Back to design
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Check email state */}
+        {step === 3 && checkEmail && (
+          <div className="max-w-md mx-auto text-center slide-up">
+            <div className="text-5xl mb-4">📬</div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-3">Check your email</h1>
+            <p className="text-gray-500 mb-4">
+              We sent a confirmation link to <strong>{signUpEmail}</strong>. Click it to activate your account and your loyalty card will go live automatically.
+            </p>
+            <p className="text-sm text-gray-400">You can close this tab — we'll pick up where you left off after you confirm.</p>
           </div>
         )}
       </main>
     </div>
+  )
+}
+
+export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-400">Loading…</div>}>
+      <OnboardingInner />
+    </Suspense>
   )
 }
