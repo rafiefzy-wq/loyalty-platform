@@ -59,68 +59,18 @@ interface WizardData {
 
 const STORAGE_KEY = 'pending_onboarding'
 
-async function saveToDatabase(user: { id: string; email?: string; user_metadata?: { name?: string } }, data: WizardData) {
-  const supabase = createClient()
-  const slug = slugify(data.businessName) || `business-${Date.now()}`
-
-  const { data: business, error: bErr } = await supabase
-    .from('businesses')
-    .insert({
-      owner_id: user.id,
-      name: data.businessName,
-      slug,
-      type: data.businessType,
-      logo_url: data.logoUrl || null,
-      brand_color: data.brandColor,
-      secondary_color: data.secondaryColor,
-      background_image_url: data.stripImageUrl || null,
-      font_choice: data.fontChoice,
-      is_multi_location: data.isMultiLocation,
-      plan: 'free_trial',
-    })
-    .select()
-    .single()
-
-  if (bErr) throw bErr
-
-  const locData = data.locations.filter((l) => l.name).map((l) => ({
-    business_id: business.id,
-    name: l.name,
-    address: l.address || null,
-    city: l.city || null,
-    country: l.country || null,
-  }))
-
-  const { error: lErr } = await supabase.from('locations').insert(locData)
-  if (lErr) throw lErr
-
-  const { data: card, error: cErr } = await supabase
-    .from('loyalty_cards')
-    .insert({
-      business_id: business.id,
-      stamp_goal: data.stampGoal,
-      reward_description: data.rewardDescription,
-      card_scope: data.isMultiLocation ? 'all_locations' : 'per_location',
-      background_color: data.brandColor,
-      foreground_color: data.foregroundColor,
-      label_color: data.labelColor,
-      strip_image_url: data.stripImageUrl || null,
-      icon_url: data.logoUrl || null,
-    })
-    .select()
-    .single()
-
-  if (cErr) throw cErr
-
-  await supabase.from('employees').insert({
-    business_id: business.id,
-    user_id: user.id,
-    email: user.email!,
-    name: user.user_metadata?.name || null,
-    role: 'owner',
+async function saveToDatabase(_user: unknown, data: WizardData) {
+  const res = await fetch('/api/onboarding/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
   })
-
-  return card
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.error || 'Failed to save')
+  }
+  const { cardId } = await res.json()
+  return { id: cardId }
 }
 
 function OnboardingInner() {
