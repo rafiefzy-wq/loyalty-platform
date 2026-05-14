@@ -1,8 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { TeamClient } from './team-client'
+import { IS_DEV, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function TeamPage() {
+  if (IS_DEV) {
+    return <TeamClient employees={[]} invitations={[]} locations={[]} businessId={DEV_BUSINESS.id} />
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')

@@ -33,6 +33,11 @@ export async function updateSession(request: NextRequest) {
 
     const { pathname } = request.nextUrl
 
+    // Skip auth in development so you can preview pages without signing in
+    if (process.env.NODE_ENV === 'development') {
+      return supabaseResponse
+    }
+
     const protectedPaths = ['/dashboard', '/scanner']
     const isProtected = protectedPaths.some((p) => pathname.startsWith(p))
 

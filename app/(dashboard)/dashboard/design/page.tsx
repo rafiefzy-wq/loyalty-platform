@@ -1,8 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CardDesignClient } from './card-design-client'
+import { IS_DEV, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function CardDesignPage() {
+  if (IS_DEV) {
+    return <CardDesignClient business={DEV_BUSINESS as any} loyaltyCard={null} />
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')

@@ -5,8 +5,67 @@ import { Users, TrendingUp, Gift, QrCode, ArrowRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import QRCode from 'qrcode'
+import { IS_DEV, DEV_USER, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function DashboardPage() {
+  if (IS_DEV) {
+    const business = DEV_BUSINESS
+    const stats = [
+      { label: 'Total customers', value: 24, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+      { label: 'Visits this week', value: 8, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
+      { label: 'Rewards claimed', value: 3, icon: Gift, color: 'text-purple-600', bg: 'bg-purple-50' },
+      { label: 'Active passes', value: 24, icon: QrCode, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    ]
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
+          <p className="text-gray-500 text-sm mt-1">Welcome back to {business.name} <span className="text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded ml-1">dev preview</span></p>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((s) => (
+            <Card key={s.label} className="border-0 shadow-sm">
+              <CardContent className="p-5">
+                <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
+                  <s.icon className={`w-5 h-5 ${s.color}`} />
+                </div>
+                <p className="text-2xl font-bold text-gray-900">{s.value}</p>
+                <p className="text-sm text-gray-500 mt-0.5">{s.label}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Card className="border-0 shadow-sm">
+            <CardHeader><CardTitle className="text-base">Counter QR Code</CardTitle></CardHeader>
+            <CardContent className="text-center">
+              <div className="w-40 h-40 mx-auto bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 text-sm">QR preview</div>
+              <p className="text-xs text-gray-500 mt-3">Sign up to generate real QR</p>
+            </CardContent>
+          </Card>
+          <Card className="border-0 shadow-sm lg:col-span-2">
+            <CardHeader><CardTitle className="text-base">Reward Queue</CardTitle></CardHeader>
+            <CardContent>
+              <div className="text-center py-8">
+                <p className="text-3xl mb-2">🎫</p>
+                <p className="text-sm text-gray-500">No rewards ready yet</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <Card className="border-0 shadow-sm">
+          <CardHeader><CardTitle className="text-base">Recent Customers</CardTitle></CardHeader>
+          <CardContent>
+            <div className="text-center py-8">
+              <p className="text-3xl mb-2">👥</p>
+              <p className="text-sm text-gray-500">No customers yet. Share your QR code to get started!</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')

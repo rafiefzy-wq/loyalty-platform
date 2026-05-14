@@ -1,8 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { CustomerListClient } from './customer-list-client'
+import { IS_DEV, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function CustomersPage() {
+  if (IS_DEV) {
+    return <CustomerListClient passes={[]} loyaltyCard={null} locations={[]} />
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')

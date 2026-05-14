@@ -1,8 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SettingsClient } from './settings-client'
+import { IS_DEV, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function SettingsPage() {
+  if (IS_DEV) {
+    return <SettingsClient business={DEV_BUSINESS as any} locations={[]} />
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')

@@ -1,8 +1,18 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { AnalyticsClient } from './analytics-client'
+import { IS_DEV } from '@/lib/dev-data'
 
 export default async function AnalyticsPage() {
+  if (IS_DEV) {
+    const now = new Date()
+    const chartData = Array.from({ length: 30 }, (_, i) => {
+      const d = new Date(now); d.setDate(d.getDate() - (29 - i))
+      return { date: d.toISOString().slice(5, 10), stamps: Math.floor(Math.random() * 8), redemptions: Math.floor(Math.random() * 2) }
+    })
+    return <AnalyticsClient chartData={chartData} deviceCounts={{ apple: 14, google: 7, unknown: 3 }} totalPasses={24} totalStamps={87} totalRedemptions={3} />
+  }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
