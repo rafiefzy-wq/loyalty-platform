@@ -73,7 +73,6 @@ function OnboardingInner() {
   const [qrUrl, setQrUrl] = useState('')
   const [passUrl, setPassUrl] = useState('')
   const [showDone, setShowDone] = useState(false)
-  const [checkEmail, setCheckEmail] = useState(false)
 
   // Step 0: Business info
   const [businessName, setBusinessName] = useState('')
@@ -532,7 +531,7 @@ function OnboardingInner() {
         )}
 
         {/* Step 3: Create account */}
-        {step === 3 && !checkEmail && (
+        {step === 3 && (
           <div className="max-w-md mx-auto slide-up">
             <div className="text-center mb-8">
               <div className="text-5xl mb-3">🚀</div>
@@ -594,17 +593,6 @@ function OnboardingInner() {
           </div>
         )}
 
-        {/* Check email state */}
-        {step === 3 && checkEmail && (
-          <div className="max-w-md mx-auto text-center slide-up">
-            <div className="text-5xl mb-4">📬</div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-3">Check your email</h1>
-            <p className="text-gray-500 mb-4">
-              We sent a confirmation link to <strong>{signUpEmail}</strong>. Click it to activate your account and your loyalty card will go live automatically.
-            </p>
-            <p className="text-sm text-gray-400">You can close this tab — we'll pick up where you left off after you confirm.</p>
-          </div>
-        )}
       </main>
     </div>
   )
