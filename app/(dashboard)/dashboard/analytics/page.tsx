@@ -13,8 +13,16 @@ export default async function AnalyticsPage() {
 
   const stats = await fetchQuery(api.businesses.getStats, {}, { token })
 
-  const walletBreakdown = { apple: stats?.apple ?? 0, google: stats?.google ?? 0, unknown: 0 }
-  const chartData = [{ date: new Date().toISOString().slice(0, 10), stamps: stats?.visits ?? 0, rewards: stats?.rewards ?? 0 }]
+  const deviceCounts = { apple: stats?.apple ?? 0, google: stats?.google ?? 0, unknown: 0 }
+  const chartData = [{ date: new Date().toISOString().slice(0, 10), stamps: stats?.visits ?? 0, redemptions: stats?.rewards ?? 0 }]
 
-  return <AnalyticsClient chartData={chartData} walletBreakdown={walletBreakdown} totalCustomers={stats?.customers ?? 0} />
+  return (
+    <AnalyticsClient
+      chartData={chartData}
+      deviceCounts={deviceCounts}
+      totalPasses={stats?.customers ?? 0}
+      totalStamps={stats?.visits ?? 0}
+      totalRedemptions={stats?.rewards ?? 0}
+    />
+  )
 }
