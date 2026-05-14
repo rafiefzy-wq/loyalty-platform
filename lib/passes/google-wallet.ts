@@ -10,7 +10,7 @@ interface PassData {
 }
 
 function getAuth() {
-  const credJson = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON!, 'base64').toString('utf8')
+  const credJson = Buffer.from(process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_BASE64!, 'base64').toString('utf8')
   const credentials = JSON.parse(credJson)
   return new GoogleAuth({
     credentials,
@@ -137,7 +137,7 @@ export async function updateGoogleWalletObject(customerPass: CustomerPass, loyal
 }
 
 export function buildGoogleWalletJwt(objectId: string): string {
-  const credJson = Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON!, 'base64').toString('utf8')
+  const credJson = Buffer.from(process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_BASE64!, 'base64').toString('utf8')
   const credentials = JSON.parse(credJson)
   const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID!
 
