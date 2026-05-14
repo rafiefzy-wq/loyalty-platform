@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
 import { fetchQuery } from 'convex/nextjs'
 import { api } from '@/convex/_generated/api'
