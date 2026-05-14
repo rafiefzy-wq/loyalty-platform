@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { fetchMutation, fetchQuery } from 'convex/nextjs'
+import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
 import { generateApplePass } from '@/lib/passes/apple-wallet'
 
 export async function GET(
@@ -7,20 +9,11 @@ export async function GET(
   context: { params: Promise<{ passId: string }> }
 ) {
   const { passId } = await context.params
-  const supabase = await createServiceClient()
+  const data = await fetchQuery(api.passes.getPass, { passId: passId as Id<'customerPasses'> })
 
-  const { data: customerPass, error } = await supabase
-    .from('customer_passes')
-    .select('*, loyalty_cards(*, businesses(*))')
-    .eq('id', passId)
-    .single()
+  if (!data) return NextResponse.json({ error: 'Pass not found' }, { status: 404 })
 
-  if (error || !customerPass) {
-    return NextResponse.json({ error: 'Pass not found' }, { status: 404 })
-  }
-
-  const loyaltyCard = (customerPass as any).loyalty_cards
-  const business = loyaltyCard.businesses
+  const { pass, card, business } = data
 
   if (!process.env.APPLE_PASS_CERTIFICATE) {
     return NextResponse.json(
@@ -30,12 +23,38 @@ export async function GET(
   }
 
   try {
-    const passBuffer = await generateApplePass({ customerPass: customerPass as any, loyaltyCard, business })
+    // Map Convex camelCase to the shape generateApplePass expects
+    const passBuffer = await generateApplePass({
+      customerPass: {
+        id: pass._id,
+        stamp_count: pass.stampCount,
+        apple_pass_serial: pass.applePassSerial ?? '',
+        apple_push_token: pass.applePushToken ?? null,
+        google_pass_id: pass.googlePassId ?? null,
+      } as any,
+      loyaltyCard: {
+        id: card._id,
+        stamp_goal: card.stampGoal,
+        reward_description: card.rewardDescription,
+        background_color: card.backgroundColor,
+        foreground_color: card.foregroundColor,
+        label_color: card.labelColor,
+        icon_url: card.iconUrl ?? null,
+        strip_image_url: card.stripImageUrl ?? null,
+      } as any,
+      business: {
+        id: business?._id,
+        name: business?.name ?? '',
+        brand_color: business?.brandColor ?? '#6366f1',
+        logo_url: business?.logoUrl ?? null,
+        background_image_url: business?.backgroundImageUrl ?? null,
+      } as any,
+    })
 
     return new NextResponse(passBuffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.apple.pkpass',
-        'Content-Disposition': `attachment; filename="${(business.name as string).replace(/[^a-z0-9]/gi, '-')}.pkpass"`,
+        'Content-Disposition': `attachment; filename="${(business?.name ?? 'pass').replace(/[^a-z0-9]/gi, '-')}.pkpass"`,
         'Content-Length': passBuffer.length.toString(),
       },
     })
@@ -55,11 +74,15 @@ export async function POST(
 
   if (!pushToken) return NextResponse.json({ error: 'Missing pushToken' }, { status: 400 })
 
-  const supabase = await createServiceClient()
-  await supabase
-    .from('customer_passes')
-    .update({ apple_push_token: pushToken } as any)
-    .eq('id', passId)
+  try {
+    const data = await fetchQuery(api.passes.getPass, { passId: passId as Id<'customerPasses'> })
+    if (!data) return NextResponse.json({ error: 'Pass not found' }, { status: 404 })
 
-  return NextResponse.json({ ok: true })
+    if (data.pass.applePassSerial) {
+      await fetchMutation(api.passes.updateApplePushToken, { passSerial: data.pass.applePassSerial, pushToken })
+    }
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
 }

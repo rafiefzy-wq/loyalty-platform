@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { fetchMutation } from 'convex/nextjs'
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
+import { api } from '@/convex/_generated/api'
 
 export async function PUT(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const token = await convexAuthNextjsToken()
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const updates = await request.json()
+  const { name, type, isMultiLocation } = await request.json()
 
-  const { error } = await supabase
-    .from('businesses')
-    .update(updates)
-    .eq('owner_id', user.id)
-
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+  try {
+    await fetchMutation(api.businesses.updateSettings, { name, type, isMultiLocation }, { token })
+    return NextResponse.json({ ok: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
+  }
 }

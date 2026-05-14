@@ -1,21 +1,16 @@
-import { createClient } from '@/lib/supabase/server'
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
+import { fetchQuery } from 'convex/nextjs'
+import { api } from '@/convex/_generated/api'
 import { redirect } from 'next/navigation'
 import { ScannerClient } from './scanner-client'
 
 export default async function ScannerPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login?redirectTo=/scanner')
+  const token = await convexAuthNextjsToken()
+  if (!token) redirect('/login?redirectTo=/scanner')
 
-  // Fetch employee record
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('*, businesses(*)')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single()
+  const data = await fetchQuery(api.employees.getMyEmployee, {}, { token })
 
-  if (!employee) {
+  if (!data || !data.employee || !data.business) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
         <div className="text-center">
@@ -27,19 +22,42 @@ export default async function ScannerPage() {
     )
   }
 
-  // Fetch locations for this employee
-  const locationQuery = supabase.from('locations').select('*').eq('business_id', employee.business_id).eq('is_active', true)
-  if (employee.location_id) locationQuery.eq('id', employee.location_id)
+  const { employee, business, locations } = data
 
-  const { data: locations } = await locationQuery
+  // Map Convex camelCase to shape ScannerClient expects
+  const employeeForClient = {
+    id: employee._id,
+    role: employee.role,
+    location_id: employee.locationId ?? null,
+    business_id: employee.businessId,
+    email: employee.email,
+    name: employee.name ?? null,
+    is_active: employee.isActive,
+  }
 
-  const business = (employee as any).businesses
+  const businessForClient = {
+    id: business._id,
+    name: business.name,
+    brand_color: business.brandColor,
+    logo_url: business.logoUrl ?? null,
+    plan: business.plan,
+  }
+
+  const locationsForClient = locations.map((l: any) => ({
+    id: l._id,
+    name: l.name,
+    address: l.address ?? null,
+    city: l.city ?? null,
+    country: l.country ?? null,
+    is_active: l.isActive,
+    business_id: l.businessId,
+  }))
 
   return (
     <ScannerClient
-      employee={employee}
-      business={business}
-      locations={locations || []}
+      employee={employeeForClient as any}
+      business={businessForClient as any}
+      locations={locationsForClient as any}
     />
   )
 }

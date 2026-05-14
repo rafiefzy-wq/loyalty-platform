@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useConvexAuth } from 'convex/react'
 import { Button } from '@/components/ui/button'
 
 export default function AcceptInviteClient() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const token = searchParams.get('token')
+  const { isAuthenticated, isLoading } = useConvexAuth()
   const [status, setStatus] = useState<'loading' | 'found' | 'error' | 'accepting' | 'done'>('loading')
   const [invitation, setInvitation] = useState<any>(null)
 
@@ -24,13 +25,12 @@ export default function AcceptInviteClient() {
   }, [token])
 
   async function handleAccept() {
-    setStatus('accepting')
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      router.push(`/register?redirectTo=/invite/accept?token=${token}`)
+    if (isLoading) return
+    if (!isAuthenticated) {
+      router.push(`/login?redirectTo=/invite/accept?token=${token}`)
       return
     }
+    setStatus('accepting')
     const res = await fetch('/api/employees/accept', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

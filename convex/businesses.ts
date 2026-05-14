@@ -137,9 +137,9 @@ export const updateDesign = mutation({
 
 export const updateSettings = mutation({
   args: {
-    name: v.string(),
-    type: v.string(),
-    isMultiLocation: v.boolean(),
+    name: v.optional(v.string()),
+    type: v.optional(v.string()),
+    isMultiLocation: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx)
@@ -148,11 +148,11 @@ export const updateSettings = mutation({
     const business = await ctx.db.query('businesses').withIndex('by_owner', q => q.eq('ownerId', userId)).first()
     if (!business) throw new Error('Business not found')
 
-    await ctx.db.patch(business._id, {
-      name: args.name,
-      type: args.type,
-      isMultiLocation: args.isMultiLocation,
-    })
+    const patch: Record<string, unknown> = {}
+    if (args.name !== undefined) patch.name = args.name
+    if (args.type !== undefined) patch.type = args.type
+    if (args.isMultiLocation !== undefined) patch.isMultiLocation = args.isMultiLocation
+    await ctx.db.patch(business._id, patch as any)
   },
 })
 

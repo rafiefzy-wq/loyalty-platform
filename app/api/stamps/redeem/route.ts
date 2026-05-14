@@ -1,68 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { fetchMutation, fetchQuery } from 'convex/nextjs'
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
+import { api } from '@/convex/_generated/api'
+import type { Id } from '@/convex/_generated/dataModel'
 import { sendApplePushNotification } from '@/lib/passes/apple-wallet'
-import { updateGoogleWalletObject } from '@/lib/passes/google-wallet'
 
-// POST /api/stamps/redeem — confirm reward redemption
-// Body: { passId, locationId }
 export async function POST(request: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const token = await convexAuthNextjsToken()
+  if (!token) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { passId, locationId } = await request.json()
+  if (!passId || !locationId) return NextResponse.json({ error: 'Missing passId or locationId' }, { status: 400 })
 
-  // Must be manager or owner
-  const { data: employee } = await supabase
-    .from('employees')
-    .select('*')
-    .eq('user_id', user.id)
-    .eq('is_active', true)
-    .single()
+  try {
+    const employeeData = await fetchQuery(api.employees.getMyEmployee, {}, { token })
+    if (!employeeData || !['owner', 'manager'].includes(employeeData.employee.role)) {
+      return NextResponse.json({ error: 'Only managers can redeem rewards' }, { status: 403 })
+    }
 
-  if (!employee || !['owner', 'manager'].includes(employee.role)) {
-    return NextResponse.json({ error: 'Only managers can redeem rewards' }, { status: 403 })
+    const passData = await fetchQuery(api.passes.getPass, { passId: passId as Id<'customerPasses'> })
+    if (!passData) return NextResponse.json({ error: 'Pass not found' }, { status: 404 })
+
+    if (passData.card.businessId !== employeeData.employee.businessId) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
+    if (passData.pass.stampCount < passData.card.stampGoal) {
+      return NextResponse.json({ error: 'Reward not yet earned' }, { status: 400 })
+    }
+
+    await fetchMutation(
+      api.passes.redeemReward,
+      {
+        passId: passId as Id<'customerPasses'>,
+        locationId: locationId as Id<'locations'>,
+        employeeId: employeeData.employee._id,
+      },
+      { token }
+    )
+
+    // Fire-and-forget wallet updates
+    if (passData.pass.applePushToken) {
+      sendApplePushNotification(passData.pass.applePushToken).catch(() => {})
+    }
+    if (passData.pass.googlePassId) {
+      const { ConvexHttpClient } = await import('convex/browser')
+      const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
+      convex.action(api.walletActions.updateGoogleWalletPass, { passId: passId as Id<'customerPasses'> }).catch(() => {})
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
-
-  const { data: pass } = await supabase
-    .from('customer_passes')
-    .select('*, loyalty_cards(*)')
-    .eq('id', passId)
-    .single()
-
-  if (!pass) return NextResponse.json({ error: 'Pass not found' }, { status: 404 })
-
-  const loyaltyCard = (pass as any).loyalty_cards
-  if (loyaltyCard.business_id !== employee.business_id) {
-    return NextResponse.json({ error: 'Access denied' }, { status: 403 })
-  }
-
-  if (pass.stamp_count < loyaltyCard.stamp_goal) {
-    return NextResponse.json({ error: 'Reward not yet earned' }, { status: 400 })
-  }
-
-  const svc = await createServiceClient()
-
-  // Reset stamp count
-  await svc.from('customer_passes').update({ stamp_count: 0 }).eq('id', passId)
-
-  // Log redemption
-  await svc.from('stamp_transactions').insert({
-    customer_pass_id: passId,
-    location_id: locationId,
-    employee_id: employee.id,
-    type: 'reward_redeemed',
-  })
-
-  // Push wallet updates
-  Promise.all([
-    pass.apple_push_token
-      ? sendApplePushNotification(pass.apple_push_token).catch(() => {})
-      : Promise.resolve(),
-    pass.google_pass_id
-      ? updateGoogleWalletObject({ ...pass, stamp_count: 0 }, loyaltyCard).catch(() => {})
-      : Promise.resolve(),
-  ]).catch(() => {})
-
-  return NextResponse.json({ success: true })
 }

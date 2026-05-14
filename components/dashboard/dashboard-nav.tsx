@@ -2,8 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import type { Business } from '@/lib/supabase/types'
+import { useAuthActions } from '@convex-dev/auth/react'
 import {
   LayoutDashboard,
   Users,
@@ -20,6 +19,13 @@ import {
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 
+interface Business {
+  name: string
+  logo_url?: string | null
+  brand_color: string
+  plan: string
+}
+
 const navItems = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/customers', label: 'Customers', icon: Users },
@@ -33,11 +39,11 @@ const navItems = [
 export function DashboardNav({ business }: { business: Business }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { signOut } = useAuthActions()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await signOut()
     router.push('/')
     router.refresh()
   }
