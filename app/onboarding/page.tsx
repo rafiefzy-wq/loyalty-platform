@@ -127,11 +127,12 @@ function OnboardingInner() {
     if (!raw) return
 
     const supabase = createClient()
-    supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user) return
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!session) return
+      const user = session.user
       try {
         const data: WizardData = JSON.parse(raw)
-        const card = await saveToDatabase(user, data)
+        const card = await saveToDatabase(user, data, session.access_token)
         localStorage.removeItem(STORAGE_KEY)
         const appUrl = window.location.origin
         const samplePassUrl = `${appUrl}/pass/new?card=${card.id}`
