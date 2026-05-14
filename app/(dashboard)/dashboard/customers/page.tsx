@@ -1,48 +1,32 @@
-import { createClient } from '@/lib/supabase/server'
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
+import { fetchQuery } from 'convex/nextjs'
+import { api } from '@/convex/_generated/api'
 import { redirect } from 'next/navigation'
 import { CustomerListClient } from './customer-list-client'
-import { IS_DEV, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function CustomersPage() {
-  if (IS_DEV) {
-    return <CustomerListClient passes={[]} loyaltyCard={null} locations={[]} />
-  }
+  const token = await convexAuthNextjsToken()
+  if (!token) redirect('/login')
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single()
-
+  const business = await fetchQuery(api.businesses.getMyBusiness, {}, { token })
   if (!business) redirect('/onboarding')
 
-  const { data: loyaltyCard } = await supabase
-    .from('loyalty_cards')
-    .select('*')
-    .eq('business_id', business.id)
-    .eq('is_active', true)
-    .single()
+  const passes = await fetchQuery(api.passes.listPassesForBusiness, { businessId: business._id }, { token })
+  const locations = await fetchQuery(api.locations.listMyLocations, {}, { token })
 
-  const { data: passes } = await supabase
-    .from('customer_passes')
-    .select('*')
-    .eq('loyalty_card_id', loyaltyCard?.id || '')
-    .order('last_visited_at', { ascending: false })
+  const passesForClient = passes.map((p: any) => ({
+    id: p._id,
+    loyalty_card_id: p.loyaltyCardId,
+    stamp_count: p.stampCount,
+    customer_device: p.customerDevice ?? null,
+    last_visited_at: p.lastVisitedAt ? new Date(p.lastVisitedAt).toISOString() : null,
+    apple_pass_serial: p.applePassSerial ?? null,
+    google_pass_id: p.googlePassId ?? null,
+    loyaltyCard: p.loyaltyCard ? { stamp_goal: p.loyaltyCard.stampGoal, reward_description: p.loyaltyCard.rewardDescription } : null,
+  }))
 
-  const { data: locations } = await supabase
-    .from('locations')
-    .select('*')
-    .eq('business_id', business.id)
+  const locsForClient = locations.map((l: any) => ({ id: l._id, name: l.name }))
+  const card = passes[0]?.loyaltyCard ? { id: passes[0].loyaltyCard._id, stamp_goal: passes[0].loyaltyCard.stampGoal, reward_description: passes[0].loyaltyCard.rewardDescription } : null
 
-  return (
-    <CustomerListClient
-      passes={passes || []}
-      loyaltyCard={loyaltyCard}
-      locations={locations || []}
-    />
-  )
+  return <CustomerListClient passes={passesForClient as any} loyaltyCard={card as any} locations={locsForClient as any} />
 }

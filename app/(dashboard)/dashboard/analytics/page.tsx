@@ -1,91 +1,20 @@
-import { createClient } from '@/lib/supabase/server'
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
+import { fetchQuery } from 'convex/nextjs'
+import { api } from '@/convex/_generated/api'
 import { redirect } from 'next/navigation'
 import { AnalyticsClient } from './analytics-client'
-import { IS_DEV } from '@/lib/dev-data'
 
 export default async function AnalyticsPage() {
-  if (IS_DEV) {
-    const now = new Date()
-    const chartData = Array.from({ length: 30 }, (_, i) => {
-      const d = new Date(now); d.setDate(d.getDate() - (29 - i))
-      return { date: d.toISOString().slice(5, 10), stamps: Math.floor(Math.random() * 8), redemptions: Math.floor(Math.random() * 2) }
-    })
-    return <AnalyticsClient chartData={chartData} deviceCounts={{ apple: 14, google: 7, unknown: 3 }} totalPasses={24} totalStamps={87} totalRedemptions={3} />
-  }
+  const token = await convexAuthNextjsToken()
+  if (!token) redirect('/login')
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single()
-
+  const business = await fetchQuery(api.businesses.getMyBusiness, {}, { token })
   if (!business) redirect('/onboarding')
 
-  const { data: loyaltyCard } = await supabase
-    .from('loyalty_cards')
-    .select('*')
-    .eq('business_id', business.id)
-    .eq('is_active', true)
-    .single()
+  const stats = await fetchQuery(api.businesses.getStats, {}, { token })
 
-  // Last 30 days of transactions
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: transactions } = await supabase
-    .from('stamp_transactions')
-    .select('created_at, type')
-    .gte('created_at', thirtyDaysAgo)
-    .order('created_at')
+  const walletBreakdown = { apple: stats?.apple ?? 0, google: stats?.google ?? 0, unknown: 0 }
+  const chartData = [{ date: new Date().toISOString().slice(0, 10), stamps: stats?.visits ?? 0, rewards: stats?.rewards ?? 0 }]
 
-  // Passes over time (by creation date, last 30 days)
-  const { data: passes } = await supabase
-    .from('customer_passes')
-    .select('created_at, stamp_count, customer_device')
-    .eq('loyalty_card_id', loyaltyCard?.id || '')
-    .order('created_at')
-
-  // Build daily chart data
-  const dailyMap: Record<string, { stamps: number; redemptions: number }> = {}
-  const now = new Date()
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - i)
-    const key = d.toISOString().slice(0, 10)
-    dailyMap[key] = { stamps: 0, redemptions: 0 }
-  }
-
-  for (const tx of transactions || []) {
-    const key = tx.created_at.slice(0, 10)
-    if (dailyMap[key]) {
-      if (tx.type === 'stamp') dailyMap[key].stamps++
-      else if (tx.type === 'reward_redeemed') dailyMap[key].redemptions++
-    }
-  }
-
-  const chartData = Object.entries(dailyMap).map(([date, vals]) => ({
-    date: date.slice(5), // MM-DD
-    stamps: vals.stamps,
-    redemptions: vals.redemptions,
-  }))
-
-  // Device split
-  const deviceCounts = { apple: 0, google: 0, unknown: 0 }
-  for (const pass of passes || []) {
-    const d = pass.customer_device as keyof typeof deviceCounts
-    if (d in deviceCounts) deviceCounts[d]++
-    else deviceCounts.unknown++
-  }
-
-  return (
-    <AnalyticsClient
-      chartData={chartData}
-      deviceCounts={deviceCounts}
-      totalPasses={passes?.length || 0}
-      totalStamps={transactions?.filter((t) => t.type === 'stamp').length || 0}
-      totalRedemptions={transactions?.filter((t) => t.type === 'reward_redeemed').length || 0}
-    />
-  )
+  return <AnalyticsClient chartData={chartData} walletBreakdown={walletBreakdown} totalCustomers={stats?.customers ?? 0} />
 }

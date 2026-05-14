@@ -1,31 +1,47 @@
-import { createClient } from '@/lib/supabase/server'
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
+import { fetchQuery } from 'convex/nextjs'
+import { api } from '@/convex/_generated/api'
 import { redirect } from 'next/navigation'
 import { CardDesignClient } from './card-design-client'
-import { IS_DEV, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function CardDesignPage() {
-  if (IS_DEV) {
-    return <CardDesignClient business={DEV_BUSINESS as any} loyaltyCard={null} />
-  }
+  const token = await convexAuthNextjsToken()
+  if (!token) redirect('/login')
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single()
-
+  const business = await fetchQuery(api.businesses.getMyBusiness, {}, { token })
   if (!business) redirect('/onboarding')
 
-  const { data: loyaltyCard } = await supabase
-    .from('loyalty_cards')
-    .select('*')
-    .eq('business_id', business.id)
-    .eq('is_active', true)
-    .single()
+  // Find active loyalty card
+  const passes = await fetchQuery(api.passes.listPassesForBusiness, { businessId: business._id }, { token })
+  const card = (passes as any)?.[0]?.loyaltyCard ?? null
 
-  return <CardDesignClient business={business} loyaltyCard={loyaltyCard} />
+  const bizForClient = {
+    id: business._id,
+    name: business.name,
+    slug: business.slug,
+    type: business.type,
+    logo_url: business.logoUrl ?? null,
+    brand_color: business.brandColor,
+    secondary_color: business.secondaryColor,
+    background_image_url: business.backgroundImageUrl ?? null,
+    font_choice: business.fontChoice,
+    plan: business.plan,
+    is_multi_location: business.isMultiLocation,
+  }
+
+  const cardForClient = card ? {
+    id: card._id,
+    business_id: card.businessId,
+    stamp_goal: card.stampGoal,
+    reward_description: card.rewardDescription,
+    card_scope: card.cardScope,
+    is_active: card.isActive,
+    strip_image_url: card.stripImageUrl ?? null,
+    icon_url: card.iconUrl ?? null,
+    background_color: card.backgroundColor,
+    foreground_color: card.foregroundColor,
+    label_color: card.labelColor,
+  } : null
+
+  return <CardDesignClient business={bizForClient as any} loyaltyCard={cardForClient as any} />
 }

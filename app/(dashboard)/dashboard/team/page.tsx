@@ -1,49 +1,22 @@
-import { createClient } from '@/lib/supabase/server'
+import { convexAuthNextjsToken } from '@convex-dev/auth/nextjs/server'
+import { fetchQuery } from 'convex/nextjs'
+import { api } from '@/convex/_generated/api'
 import { redirect } from 'next/navigation'
 import { TeamClient } from './team-client'
-import { IS_DEV, DEV_BUSINESS } from '@/lib/dev-data'
 
 export default async function TeamPage() {
-  if (IS_DEV) {
-    return <TeamClient employees={[]} invitations={[]} locations={[]} businessId={DEV_BUSINESS.id} />
-  }
+  const token = await convexAuthNextjsToken()
+  if (!token) redirect('/login')
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: business } = await supabase
-    .from('businesses')
-    .select('*')
-    .eq('owner_id', user.id)
-    .single()
-
+  const business = await fetchQuery(api.businesses.getMyBusiness, {}, { token })
   if (!business) redirect('/onboarding')
 
-  const { data: employees } = await supabase
-    .from('employees')
-    .select('*')
-    .eq('business_id', business.id)
-    .order('created_at')
+  const { employees, invitations } = await fetchQuery(api.employees.listMyTeam, {}, { token })
+  const locations = await fetchQuery(api.locations.listMyLocations, {}, { token })
 
-  const { data: invitations } = await supabase
-    .from('employee_invitations')
-    .select('*')
-    .eq('business_id', business.id)
-    .is('accepted_at', null)
-    .order('created_at', { ascending: false })
+  const empsForClient = employees.map((e: any) => ({ id: e._id, email: e.email, name: e.name ?? null, role: e.role, is_active: e.isActive }))
+  const invsForClient = invitations.map((i: any) => ({ id: i._id, email: i.email, role: i.role, token: i.token, expires_at: new Date(i.expiresAt).toISOString() }))
+  const locsForClient = locations.map((l: any) => ({ id: l._id, name: l.name }))
 
-  const { data: locations } = await supabase
-    .from('locations')
-    .select('*')
-    .eq('business_id', business.id)
-
-  return (
-    <TeamClient
-      employees={employees || []}
-      invitations={invitations || []}
-      locations={locations || []}
-      businessId={business.id}
-    />
-  )
+  return <TeamClient employees={empsForClient as any} invitations={invsForClient as any} locations={locsForClient as any} businessId={business._id} />
 }

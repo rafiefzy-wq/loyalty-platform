@@ -2,8 +2,9 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
-import { slugify } from '@/lib/utils'
+import { useAuthActions } from '@convex-dev/auth/react'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
 import { toast } from '@/lib/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -59,27 +60,13 @@ interface WizardData {
 
 const STORAGE_KEY = 'pending_onboarding'
 
-async function saveToDatabase(_user: unknown, data: WizardData, accessToken?: string) {
-  const res = await fetch('/api/onboarding/complete', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.error || 'Failed to save')
-  }
-  const { cardId } = await res.json()
-  return { id: cardId }
-}
 
 function OnboardingInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const resume = searchParams.get('resume')
+  const { signIn } = useAuthActions()
+  const completeOnboarding = useMutation(api.businesses.completeOnboarding)
 
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -120,33 +107,8 @@ function OnboardingInner() {
     foregroundColor, labelColor, fontChoice, stampGoal, rewardDescription,
   })
 
-  // Resume after email confirmation
   useEffect(() => {
-    if (resume !== '1') return
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return
-
-    const supabase = createClient()
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) return
-      const user = session.user
-      try {
-        const data: WizardData = JSON.parse(raw)
-        const card = await saveToDatabase(user, data, session.access_token)
-        localStorage.removeItem(STORAGE_KEY)
-        const appUrl = window.location.origin
-        const samplePassUrl = `${appUrl}/pass/new?card=${card.id}`
-        setPassUrl(samplePassUrl)
-        const qrRes = await fetch(`/api/passes/qr?url=${encodeURIComponent(samplePassUrl)}`)
-        if (qrRes.ok) {
-          const { qrDataUrl } = await qrRes.json()
-          setQrUrl(qrDataUrl)
-        }
-        setShowDone(true)
-      } catch (err: unknown) {
-        toast({ title: (err as Error).message || 'Something went wrong', variant: 'destructive' })
-      }
-    })
+    // no-op: email confirmation flow removed; Convex Auth signs up immediately
   }, [resume])
 
   const cardData: WalletCardData = {
@@ -163,31 +125,13 @@ function OnboardingInner() {
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { toast({ title: 'Create your account first to upload images', variant: 'destructive' }); return }
-    const ext = file.name.split('.').pop()
-    const path = `logos/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('business-assets').upload(path, file)
-    if (error) { toast({ title: 'Upload failed', variant: 'destructive' }); return }
-    const { data } = supabase.storage.from('business-assets').getPublicUrl(path)
-    setLogoUrl(data.publicUrl)
+    toast({ title: 'Image uploads coming soon — you can add images from the dashboard after sign-up', variant: 'destructive' })
+    e.target.value = ''
   }
 
   async function handleStripUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { toast({ title: 'Create your account first to upload images', variant: 'destructive' }); return }
-    const ext = file.name.split('.').pop()
-    const path = `strips/${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('business-assets').upload(path, file)
-    if (error) { toast({ title: 'Upload failed', variant: 'destructive' }); return }
-    const { data } = supabase.storage.from('business-assets').getPublicUrl(path)
-    setStripImageUrl(data.publicUrl)
+    toast({ title: 'Image uploads coming soon — you can add images from the dashboard after sign-up', variant: 'destructive' })
+    e.target.value = ''
   }
 
   async function handleSignUpAndSave() {
@@ -197,38 +141,41 @@ function OnboardingInner() {
     }
     setSaving(true)
     try {
-      const data = wizardData()
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
-
-      const supabase = createClient()
-      const { data: authData, error } = await supabase.auth.signUp({
+      // Sign up with Convex Auth (no email confirmation required)
+      await signIn('password', {
         email: signUpEmail,
         password: signUpPassword,
-        options: {
-          data: { name: signUpName },
-          emailRedirectTo: `${window.location.origin}/auth/callback?next=/onboarding?resume=1`,
-        },
+        name: signUpName,
+        flow: 'signUp',
       })
 
-      if (error) throw error
+      // Save business data via Convex mutation (user is now authenticated)
+      const data = wizardData()
+      const cardId = await completeOnboarding({
+        businessName: data.businessName,
+        businessType: data.businessType,
+        isMultiLocation: data.isMultiLocation,
+        locations: data.locations,
+        logoUrl: data.logoUrl || undefined,
+        stripImageUrl: data.stripImageUrl || undefined,
+        brandColor: data.brandColor,
+        secondaryColor: data.secondaryColor,
+        foregroundColor: data.foregroundColor,
+        labelColor: data.labelColor,
+        fontChoice: data.fontChoice,
+        stampGoal: data.stampGoal,
+        rewardDescription: data.rewardDescription,
+      })
 
-      if (authData.session && authData.user) {
-        // Email confirmation not required — save immediately, pass token so server can auth
-        const card = await saveToDatabase(authData.user, data, authData.session.access_token)
-        localStorage.removeItem(STORAGE_KEY)
-        const appUrl = window.location.origin
-        const samplePassUrl = `${appUrl}/pass/new?card=${card.id}`
-        setPassUrl(samplePassUrl)
-        const qrRes = await fetch(`/api/passes/qr?url=${encodeURIComponent(samplePassUrl)}`)
-        if (qrRes.ok) {
-          const { qrDataUrl } = await qrRes.json()
-          setQrUrl(qrDataUrl)
-        }
-        setShowDone(true)
-      } else {
-        // Email confirmation required
-        setCheckEmail(true)
+      const appUrl = window.location.origin
+      const samplePassUrl = `${appUrl}/pass/new?card=${cardId}`
+      setPassUrl(samplePassUrl)
+      const qrRes = await fetch(`/api/passes/qr?url=${encodeURIComponent(samplePassUrl)}`)
+      if (qrRes.ok) {
+        const { qrDataUrl } = await qrRes.json()
+        setQrUrl(qrDataUrl)
       }
+      setShowDone(true)
     } catch (err: unknown) {
       toast({ title: (err as Error).message || 'Something went wrong', variant: 'destructive' })
     } finally {
