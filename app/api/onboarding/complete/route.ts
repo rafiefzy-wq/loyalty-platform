@@ -5,11 +5,12 @@ import { slugify } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
-    // Verify via Authorization header token (cookie may not be set yet right after signUp)
     const authHeader = req.headers.get('Authorization')
     const token = authHeader?.replace('Bearer ', '')
 
     let user = null
+    let accessToken: string | null = token || null
+
     if (token) {
       const supabase = await createClient()
       const { data } = await supabase.auth.getUser(token)
@@ -19,11 +20,14 @@ export async function POST(req: NextRequest) {
     if (!user) {
       // Fallback to cookie session
       const supabase = await createClient()
-      const { data } = await supabase.auth.getUser()
-      user = data.user
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      if (!sessionError && data.session) {
+        user = data.session.user
+        accessToken = data.session.access_token
+      }
     }
 
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!user || !accessToken) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const data = await req.json()
     const {
@@ -32,11 +36,15 @@ export async function POST(req: NextRequest) {
       foregroundColor, labelColor, fontChoice, stampGoal, rewardDescription,
     } = data
 
-    // Raw service role client — fully bypasses RLS
-    const service = createSupabaseClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    // Prefer service role (bypasses RLS). If key missing, fall back to user's JWT (works with RLS policies).
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const service = serviceKey
+      ? createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey)
+      : createSupabaseClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          { global: { headers: { Authorization: `Bearer ${accessToken}` } } }
+        )
 
     const slug = slugify(businessName) || `business-${Date.now()}`
 
