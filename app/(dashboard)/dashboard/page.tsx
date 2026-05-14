@@ -3,9 +3,12 @@ import { fetchQuery } from 'convex/nextjs'
 import { api } from '@/convex/_generated/api'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Users, TrendingUp, Gift, QrCode, ArrowRight } from 'lucide-react'
+import Image from 'next/image'
+import { Users, TrendingUp, Gift, QrCode, ArrowRight, Smartphone, Watch } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import QRCode from 'qrcode'
+
+export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
   const token = await convexAuthNextjsToken()
@@ -14,16 +17,18 @@ export default async function DashboardPage() {
   const business = await fetchQuery(api.businesses.getMyBusiness, {}, { token })
   if (!business) redirect('/onboarding')
 
-  const stats = await fetchQuery(api.businesses.getStats, {}, { token })
+  const [stats, activeCard, recentPasses] = await Promise.all([
+    fetchQuery(api.businesses.getStats, {}, { token }),
+    fetchQuery(api.passes.getActiveCardForBusiness, {}, { token }),
+    fetchQuery(api.passes.getRecentPasses, { limit: 8 }, { token }),
+  ])
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const card = await fetchQuery(api.passes.getCardById, { cardId: undefined as any }, { token }).catch(() => null)
-
-  // Get active loyalty card for QR
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://loyalty-platform-pearl.vercel.app'
   let qrDataUrl = ''
-  // We'll generate QR from the business pass URL pattern
-  const passLinkUrl = `${appUrl}/pass/new?card=`
-  // QR will be generated client-side or we skip for now
+  if (activeCard) {
+    const passUrl = `${appUrl}/pass/new?card=${activeCard._id}`
+    qrDataUrl = await QRCode.toDataURL(passUrl, { width: 200, margin: 1, color: { dark: '#1e1b4b', light: '#ffffff' } })
+  }
 
   const statCards = [
     { label: 'Total customers', value: stats?.customers ?? 0, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
@@ -31,6 +36,23 @@ export default async function DashboardPage() {
     { label: 'Rewards claimed', value: stats?.rewards ?? 0, icon: Gift, color: 'text-purple-600', bg: 'bg-purple-50' },
     { label: 'Active passes', value: stats?.passes ?? 0, icon: QrCode, color: 'text-indigo-600', bg: 'bg-indigo-50' },
   ]
+
+  function deviceIcon(device: string) {
+    if (device === 'apple') return <Watch className="w-4 h-4 text-gray-500" />
+    if (device === 'google') return <Smartphone className="w-4 h-4 text-gray-500" />
+    return <Smartphone className="w-4 h-4 text-gray-400" />
+  }
+
+  function timeAgo(ms: number) {
+    const diff = Date.now() - ms
+    const mins = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    const days = Math.floor(diff / 86400000)
+    if (days > 0) return `${days}d ago`
+    if (hours > 0) return `${hours}h ago`
+    if (mins > 0) return `${mins}m ago`
+    return 'just now'
+  }
 
   return (
     <div className="space-y-8">
@@ -56,10 +78,27 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="border-0 shadow-sm">
           <CardHeader><CardTitle className="text-base">Counter QR Code</CardTitle></CardHeader>
-          <CardContent className="text-center">
-            <p className="text-sm text-gray-400 py-8">Go to Customers to get your QR code</p>
+          <CardContent className="flex flex-col items-center gap-3">
+            {qrDataUrl ? (
+              <>
+                <Image src={qrDataUrl} alt="Loyalty card QR code" width={160} height={160} className="rounded-lg" />
+                <p className="text-xs text-gray-400 text-center">Customers scan this to add your loyalty card</p>
+                {activeCard && (
+                  <Link
+                    href={`${appUrl}/pass/new?card=${activeCard._id}`}
+                    target="_blank"
+                    className="text-xs text-indigo-600 hover:underline"
+                  >
+                    Preview pass link ↗
+                  </Link>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-gray-400 py-8 text-center">No active loyalty card found</p>
+            )}
           </CardContent>
         </Card>
+
         <Card className="border-0 shadow-sm lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">Recent Customers</CardTitle>
@@ -68,10 +107,32 @@ export default async function DashboardPage() {
             </Link>
           </CardHeader>
           <CardContent>
-            <div className="text-center py-8">
-              <p className="text-3xl mb-2">👥</p>
-              <p className="text-sm text-gray-500">Share your QR code to get started!</p>
-            </div>
+            {recentPasses.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-3xl mb-2">👥</p>
+                <p className="text-sm text-gray-500">Share your QR code to get started!</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {recentPasses.map((pass) => (
+                  <div key={pass.id} className="flex items-center justify-between py-2.5">
+                    <div className="flex items-center gap-2.5">
+                      {deviceIcon(pass.device)}
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">
+                          {pass.device === 'apple' ? 'Apple Wallet' : pass.device === 'google' ? 'Google Wallet' : 'Wallet pass'}
+                        </p>
+                        <p className="text-xs text-gray-400">{timeAgo(pass.joinedAt)}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-semibold text-gray-700">{pass.stampCount} / {pass.stampGoal}</p>
+                      <p className="text-xs text-gray-400">stamps</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

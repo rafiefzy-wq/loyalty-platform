@@ -166,16 +166,36 @@ export const getStats = query({
     if (!business) return null
 
     const card = await ctx.db.query('loyaltyCards').withIndex('by_business', q => q.eq('businessId', business._id)).filter(q => q.eq(q.field('isActive'), true)).first()
-    if (!card) return { customers: 0, visits: 0, rewards: 0, passes: 0 }
+    if (!card) return { customers: 0, visits: 0, rewards: 0, passes: 0, apple: 0, google: 0, chartData: [] }
 
     const passes = await ctx.db.query('customerPasses').withIndex('by_loyalty_card', q => q.eq('loyaltyCardId', card._id)).collect()
     const appleCount = passes.filter(p => p.customerDevice === 'apple').length
     const googleCount = passes.filter(p => p.customerDevice === 'google').length
+    const unknownCount = passes.filter(p => !p.customerDevice).length
 
-    const transactions = await ctx.db.query('stampTransactions').collect()
     const myPassIds = new Set(passes.map(p => p._id))
-    const myTransactions = transactions.filter(t => myPassIds.has(t.customerPassId))
+    const allTransactions = await ctx.db.query('stampTransactions').collect()
+    const myTransactions = allTransactions.filter(t => myPassIds.has(t.customerPassId))
     const rewards = myTransactions.filter(t => t.type === 'reward_redeemed').length
+
+    // Build 30-day daily chart data using _creationTime
+    const now = Date.now()
+    const thirtyDaysAgo = now - 30 * 24 * 60 * 60 * 1000
+    const dailyMap = new Map<string, { stamps: number; redemptions: number }>()
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now - i * 24 * 60 * 60 * 1000)
+      dailyMap.set(d.toISOString().slice(0, 10), { stamps: 0, redemptions: 0 })
+    }
+    for (const t of myTransactions) {
+      if (t._creationTime < thirtyDaysAgo) continue
+      const day = new Date(t._creationTime).toISOString().slice(0, 10)
+      const entry = dailyMap.get(day)
+      if (entry) {
+        if (t.type === 'stamp') entry.stamps++
+        else if (t.type === 'reward_redeemed') entry.redemptions++
+      }
+    }
+    const chartData = Array.from(dailyMap.entries()).map(([date, v]) => ({ date, stamps: v.stamps, redemptions: v.redemptions }))
 
     return {
       customers: passes.length,
@@ -184,6 +204,8 @@ export const getStats = query({
       passes: passes.length,
       apple: appleCount,
       google: googleCount,
+      unknown: unknownCount,
+      chartData,
     }
   },
 })
