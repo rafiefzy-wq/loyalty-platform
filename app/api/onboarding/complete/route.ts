@@ -5,9 +5,24 @@ import { slugify } from '@/lib/utils'
 
 export async function POST(req: NextRequest) {
   try {
-    // Verify the user is authenticated via cookie session
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    // Verify via Authorization header token (cookie may not be set yet right after signUp)
+    const authHeader = req.headers.get('Authorization')
+    const token = authHeader?.replace('Bearer ', '')
+
+    let user = null
+    if (token) {
+      const supabase = await createClient()
+      const { data } = await supabase.auth.getUser(token)
+      user = data.user
+    }
+
+    if (!user) {
+      // Fallback to cookie session
+      const supabase = await createClient()
+      const { data } = await supabase.auth.getUser()
+      user = data.user
+    }
+
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const data = await req.json()

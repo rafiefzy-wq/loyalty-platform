@@ -59,10 +59,13 @@ interface WizardData {
 
 const STORAGE_KEY = 'pending_onboarding'
 
-async function saveToDatabase(_user: unknown, data: WizardData) {
+async function saveToDatabase(_user: unknown, data: WizardData, accessToken?: string) {
   const res = await fetch('/api/onboarding/complete', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {}),
+    },
     body: JSON.stringify(data),
   })
   if (!res.ok) {
@@ -209,8 +212,8 @@ function OnboardingInner() {
       if (error) throw error
 
       if (authData.session && authData.user) {
-        // Email confirmation not required — save immediately
-        const card = await saveToDatabase(authData.user, data)
+        // Email confirmation not required — save immediately, pass token so server can auth
+        const card = await saveToDatabase(authData.user, data, authData.session.access_token)
         localStorage.removeItem(STORAGE_KEY)
         const appUrl = window.location.origin
         const samplePassUrl = `${appUrl}/pass/new?card=${card.id}`
