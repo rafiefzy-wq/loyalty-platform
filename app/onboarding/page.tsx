@@ -150,7 +150,7 @@ function OnboardingInner() {
 
       // Save business data via Convex mutation (user is now authenticated)
       const data = wizardData()
-      const cardId = await completeOnboarding({
+      const { cardId } = await completeOnboarding({
         businessName: data.businessName,
         businessType: data.businessType,
         isMultiLocation: data.isMultiLocation,
