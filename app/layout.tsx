@@ -4,6 +4,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Toaster } from '@/components/ui/toaster'
+import { ConvexAuthNextjsServerProvider } from '@convex-dev/auth/nextjs/server'
 import { Providers } from './providers'
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
@@ -19,14 +20,16 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} h-full`}>
       <body className="min-h-full flex flex-col antialiased">
-        <Providers>
-          {children}
-          <Toaster />
-        </Providers>
+        <ConvexAuthNextjsServerProvider>
+          <Providers>
+            {children}
+            <Toaster />
+          </Providers>
+        </ConvexAuthNextjsServerProvider>
       </body>
     </html>
   )
