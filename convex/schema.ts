@@ -67,6 +67,7 @@ export default defineSchema({
     stampCount: v.number(),
     passUrl: v.optional(v.string()),
     customerDevice: v.optional(v.string()),
+    customerName: v.optional(v.string()),
     lastVisitedAt: v.optional(v.number()),
   })
     .index('by_loyalty_card', ['loyaltyCardId'])

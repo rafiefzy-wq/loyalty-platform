@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import type { CustomerPass, LoyaltyCard, Location } from '@/lib/supabase/types'
+import type { CustomerPass, LoyaltyCard, Location } from '@/lib/types'
 import { toast } from '@/lib/hooks/use-toast'
-import { Search, Gift, Apple, Smartphone } from 'lucide-react'
+import { Search, Gift, Apple, Smartphone, User } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,7 +20,11 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
   const [redeemingId, setRedeemingId] = useState<string | null>(null)
 
   const filtered = passes.filter((p) => {
-    const matchSearch = p.id.toLowerCase().includes(search.toLowerCase())
+    const s = search.toLowerCase()
+    const matchSearch =
+      !s ||
+      p.id.toLowerCase().includes(s) ||
+      (p.customer_name && p.customer_name.toLowerCase().includes(s))
     const matchFilter = filter === 'all' || (filter === 'reward_ready' && p.stamp_count >= (loyaltyCard?.stamp_goal || 999))
     return matchSearch && matchFilter
   })
@@ -68,7 +72,7 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Search by pass ID…"
+            placeholder="Search by name or pass ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -96,6 +100,7 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
+                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Name</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Pass ID</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Device</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Stamps</th>
@@ -107,7 +112,7 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
             <tbody className="divide-y divide-gray-50">
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
+                  <td colSpan={7} className="text-center py-12 text-gray-400 text-sm">
                     No customers found
                   </td>
                 </tr>
@@ -116,6 +121,21 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
                   const isReady = pass.stamp_count >= (loyaltyCard?.stamp_goal || 999)
                   return (
                     <tr key={pass.id} className={`hover:bg-gray-50 transition-colors ${isReady ? 'bg-yellow-50/50' : ''}`}>
+                      <td className="px-5 py-4">
+                        {pass.customer_name ? (
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-700">
+                              {pass.customer_name.charAt(0).toUpperCase()}
+                            </div>
+                            <span className="text-sm font-medium text-gray-900">{pass.customer_name}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 text-gray-400">
+                            <User className="w-4 h-4" />
+                            <span className="text-sm italic">Anonymous</span>
+                          </div>
+                        )}
+                      </td>
                       <td className="px-5 py-4">
                         <span className="font-mono text-sm text-gray-700">{pass.id.slice(0, 12)}…</span>
                       </td>

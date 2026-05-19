@@ -11,9 +11,8 @@ export default async function CardDesignPage() {
   const business = await fetchQuery(api.businesses.getMyBusiness, {}, { token })
   if (!business) redirect('/onboarding')
 
-  // Find active loyalty card
-  const passes = await fetchQuery(api.passes.listPassesForBusiness, { businessId: business._id }, { token })
-  const card = (passes as any)?.[0]?.loyaltyCard ?? null
+  // Active loyalty card for this business (doesn't depend on having customers yet)
+  const card = await fetchQuery(api.passes.getActiveCardForBusiness, {}, { token })
 
   const bizForClient = {
     id: business._id,

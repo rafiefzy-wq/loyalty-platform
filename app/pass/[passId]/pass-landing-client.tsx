@@ -1,6 +1,6 @@
 'use client'
 
-import type { CustomerPass, LoyaltyCard, Business } from '@/lib/supabase/types'
+import type { CustomerPass, LoyaltyCard, Business } from '@/lib/types'
 import { AppleWalletPreview, GoogleWalletPreview } from '@/components/wallet-preview/wallet-card-preview'
 
 interface Props {

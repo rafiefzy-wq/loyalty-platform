@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { Employee, EmployeeInvitation, Location } from '@/lib/supabase/types'
+import type { Employee, EmployeeInvitation, Location } from '@/lib/types'
 import { toast } from '@/lib/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

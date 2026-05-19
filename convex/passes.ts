@@ -41,6 +41,32 @@ export const createPass = mutation({
   },
 })
 
+export const createNamedPass = mutation({
+  args: { customerName: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx)
+    if (!userId) throw new Error('Unauthorized')
+
+    const business = await ctx.db.query('businesses').withIndex('by_owner', q => q.eq('ownerId', userId)).first()
+    if (!business) throw new Error('Business not found')
+
+    const card = await ctx.db.query('loyaltyCards').withIndex('by_business', q => q.eq('businessId', business._id)).filter(q => q.eq(q.field('isActive'), true)).first()
+    if (!card) throw new Error('No active loyalty card — complete onboarding first')
+
+    const name = args.customerName.trim()
+    if (!name) throw new Error('Customer name is required')
+
+    const passId = await ctx.db.insert('customerPasses', {
+      loyaltyCardId: card._id,
+      stampCount: 0,
+      applePassSerial: crypto.randomUUID(),
+      customerName: name,
+    })
+
+    return { passId, cardId: card._id }
+  },
+})
+
 export const updateGooglePassId = mutation({
   args: { passId: v.id('customerPasses'), googlePassId: v.string(), passUrl: v.string() },
   handler: async (ctx, args) => {
@@ -83,6 +109,7 @@ export const getRecentPasses = query({
       stampCount: p.stampCount,
       stampGoal: card.stampGoal,
       device: p.customerDevice ?? 'unknown',
+      customerName: p.customerName ?? null,
       lastVisitedAt: p.lastVisitedAt ?? p._creationTime,
       joinedAt: p._creationTime,
     }))

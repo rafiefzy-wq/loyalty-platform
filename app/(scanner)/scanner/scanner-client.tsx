@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import type { Employee, Business, Location } from '@/lib/supabase/types'
+import type { Employee, Business, Location } from '@/lib/types'
 import { toast } from '@/lib/hooks/use-toast'
 import { QrCode, Gift, CheckCircle, XCircle, Camera } from 'lucide-react'
 

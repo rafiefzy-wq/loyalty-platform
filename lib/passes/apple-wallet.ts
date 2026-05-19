@@ -2,7 +2,7 @@ import { PKPass } from 'passkit-generator'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
-import type { LoyaltyCard, Business, CustomerPass } from '@/lib/supabase/types'
+import type { LoyaltyCard, Business, CustomerPass } from '@/lib/types'
 
 interface PassData {
   customerPass: CustomerPass

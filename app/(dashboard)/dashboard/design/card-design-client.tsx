@@ -1,12 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import type { Business, LoyaltyCard } from '@/lib/supabase/types'
+import Image from 'next/image'
+import QRCode from 'qrcode'
+import { useMutation } from 'convex/react'
+import { api } from '@/convex/_generated/api'
+import type { Business, LoyaltyCard } from '@/lib/types'
 import { toast } from '@/lib/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AppleWalletPreview, GoogleWalletPreview } from '@/components/wallet-preview/wallet-card-preview'
+import { Download, X, Smartphone, Copy, Check, UserPlus } from 'lucide-react'
 
 const FONTS = [
   { value: 'inter', label: 'Inter' },
@@ -31,7 +36,17 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
   const [rewardDescription, setRewardDescription] = useState(loyaltyCard?.reward_description || '1 free item')
   const [logoUrl, setLogoUrl] = useState(business.logo_url || '')
   const [stripImageUrl, setStripImageUrl] = useState(loyaltyCard?.strip_image_url || '')
+  const [customerName, setCustomerName] = useState('')
   const [saving, setSaving] = useState(false)
+
+  // QR modal state
+  const [qrOpen, setQrOpen] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState('')
+  const [passUrl, setPassUrl] = useState('')
+  const [copied, setCopied] = useState(false)
+  const [savedCustomerName, setSavedCustomerName] = useState('')
+
+  const createNamedPass = useMutation(api.passes.createNamedPass)
 
   const cardData = {
     businessName: name,
@@ -48,103 +63,253 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
 
   async function handleSave() {
     setSaving(true)
-    const res = await fetch('/api/businesses/design', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        businessName: name,
-        brandColor,
-        foregroundColor,
-        labelColor,
-        fontChoice,
-        stampGoal,
-        rewardDescription,
-        logoUrl,
-        stripImageUrl,
-      }),
-    })
-    if (res.ok) {
-      toast({ title: 'Card design saved!', variant: 'success' })
-    } else {
-      toast({ title: 'Save failed', variant: 'destructive' })
+    try {
+      // 1. Save the card design itself
+      const res = await fetch('/api/businesses/design', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          businessName: name,
+          brandColor,
+          foregroundColor,
+          labelColor,
+          fontChoice,
+          stampGoal,
+          rewardDescription,
+          logoUrl,
+          stripImageUrl,
+        }),
+      })
+      if (!res.ok) {
+        toast({ title: 'Save failed', variant: 'destructive' })
+        return
+      }
+
+      if (!loyaltyCard?.id) {
+        toast({ title: 'No active loyalty card — please complete onboarding first', variant: 'destructive' })
+        return
+      }
+
+      // 2. If a customer name was entered, create a customer pass record
+      const trimmedName = customerName.trim()
+      if (trimmedName) {
+        try {
+          await createNamedPass({ customerName: trimmedName })
+          toast({ title: `Saved! "${trimmedName}" added to Customers.`, variant: 'success' })
+          setSavedCustomerName(trimmedName)
+          setCustomerName('')
+        } catch (err) {
+          toast({ title: (err as Error).message || 'Could not add customer', variant: 'destructive' })
+        }
+      } else {
+        toast({ title: 'Card design saved!', variant: 'success' })
+        setSavedCustomerName('')
+      }
+
+      // 3. Generate QR pointing at the pass-creation URL (always)
+      const url = `${window.location.origin}/pass/new?card=${loyaltyCard.id}`
+      const dataUrl = await QRCode.toDataURL(url, {
+        width: 320,
+        margin: 1,
+        color: { dark: brandColor || '#1e1b4b', light: '#ffffff' },
+      })
+      setPassUrl(url)
+      setQrDataUrl(dataUrl)
+      setQrOpen(true)
+    } catch (err) {
+      toast({ title: (err as Error).message || 'Something went wrong', variant: 'destructive' })
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
+  }
+
+  function downloadQR() {
+    const link = document.createElement('a')
+    link.href = qrDataUrl
+    link.download = `${business.slug || 'loyalty-card'}-qr.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(passUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      toast({ title: 'Copy failed — please copy manually', variant: 'destructive' })
+    }
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-      {/* Controls */}
-      <div className="space-y-5">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Card Design</h1>
-          <p className="text-gray-500 text-sm mt-1">Changes update the preview live</p>
-        </div>
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        {/* Controls */}
+        <div className="space-y-5">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Card Design</h1>
+            <p className="text-gray-500 text-sm mt-1">Changes update the preview live</p>
+          </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-          <h3 className="font-semibold text-gray-900">Stamp settings</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label>Stamps needed</Label>
-              <Input type="number" min={1} max={30} value={stampGoal} onChange={(e) => setStampGoal(Number(e.target.value))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Reward</Label>
-              <Input value={rewardDescription} onChange={(e) => setRewardDescription(e.target.value)} />
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+            <h3 className="font-semibold text-gray-900">Stamp settings</h3>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Stamps needed</Label>
+                <Input type="number" min={1} max={30} value={stampGoal} onChange={(e) => setStampGoal(Number(e.target.value))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Reward</Label>
+                <Input value={rewardDescription} onChange={(e) => setRewardDescription(e.target.value)} />
+              </div>
             </div>
           </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+            <h3 className="font-semibold text-gray-900">Colors</h3>
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { label: 'Background', value: brandColor, set: setBrandColor },
+                { label: 'Text', value: foregroundColor, set: setForegroundColor },
+                { label: 'Label text', value: labelColor, set: setLabelColor },
+              ].map(({ label, value, set }) => (
+                <div key={label} className="flex items-center gap-3">
+                  <input type="color" value={value} onChange={(e) => set(e.target.value)} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
+                  <div>
+                    <p className="text-xs text-gray-500">{label}</p>
+                    <p className="text-sm font-mono">{value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
+            <div className="flex items-center gap-2">
+              <UserPlus className="w-4 h-4 text-indigo-600" />
+              <h3 className="font-semibold text-gray-900">Customer name</h3>
+              <span className="text-xs text-gray-400">(optional)</span>
+            </div>
+            <p className="text-xs text-gray-500 -mt-1">
+              Add a name here to immediately register a customer pass when you save. They&apos;ll appear in the Customers list.
+            </p>
+            <Input
+              placeholder="e.g. John Doe"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              maxLength={60}
+            />
+          </div>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
+            <h3 className="font-semibold text-gray-900">Font</h3>
+            <div className="grid grid-cols-5 gap-2">
+              {FONTS.map((f) => (
+                <button
+                  key={f.value}
+                  type="button"
+                  onClick={() => setFontChoice(f.value)}
+                  className={`py-2 px-1 rounded-xl border-2 text-sm transition-all ${fontChoice === f.value ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 hover:border-gray-300'}`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <Button variant="primary" size="lg" onClick={handleSave} disabled={saving} className="w-full">
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-          <h3 className="font-semibold text-gray-900">Colors</h3>
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              { label: 'Background', value: brandColor, set: setBrandColor },
-              { label: 'Text', value: foregroundColor, set: setForegroundColor },
-              { label: 'Label text', value: labelColor, set: setLabelColor },
-            ].map(({ label, value, set }) => (
-              <div key={label} className="flex items-center gap-3">
-                <input type="color" value={value} onChange={(e) => set(e.target.value)} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
-                <div>
-                  <p className="text-xs text-gray-500">{label}</p>
-                  <p className="text-sm font-mono">{value}</p>
+        {/* Live preview */}
+        <div className="lg:sticky lg:top-8 self-start space-y-6">
+          <div>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Apple Wallet</p>
+            <AppleWalletPreview data={cardData} />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Google Wallet</p>
+            <GoogleWalletPreview data={cardData} />
+          </div>
+        </div>
+      </div>
+
+      {/* QR Modal — appears after save succeeds */}
+      {qrOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          onClick={() => setQrOpen(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="qr-modal-title"
+        >
+          <div
+            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setQrOpen(false)}
+              aria-label="Close"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center mb-5">
+              <h2 id="qr-modal-title" className="text-xl font-bold text-gray-900">Your loyalty card QR</h2>
+              <p className="text-sm text-gray-500 mt-1 flex items-center justify-center gap-1.5">
+                <Smartphone className="w-4 h-4" />
+                Customers scan to add it to Apple or Google Wallet
+              </p>
+              {savedCustomerName && (
+                <div className="mt-3 inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-xs font-medium px-3 py-1.5 rounded-full">
+                  <Check className="w-3.5 h-3.5" />
+                  <span>&ldquo;{savedCustomerName}&rdquo; added to Customers</span>
+                </div>
+              )}
+            </div>
+
+            {qrDataUrl && (
+              <div className="flex justify-center mb-5">
+                <div className="bg-white border-2 border-gray-100 rounded-2xl p-4">
+                  <Image src={qrDataUrl} alt="Loyalty card QR code" width={240} height={240} unoptimized />
                 </div>
               </div>
-            ))}
+            )}
+
+            <div className="bg-gray-50 rounded-xl p-3 mb-5">
+              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Pass link</p>
+              <p className="text-xs font-mono text-gray-700 break-all leading-relaxed">{passUrl}</p>
+            </div>
+
+            <div className="flex gap-2">
+              <Button variant="primary" onClick={downloadQR} className="flex-1">
+                <Download className="w-4 h-4 mr-1.5" />
+                Download QR
+              </Button>
+              <Button variant="outline" onClick={copyLink} className="flex-1">
+                {copied ? (
+                  <>
+                    <Check className="w-4 h-4 mr-1.5 text-green-600" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4 mr-1.5" />
+                    Copy link
+                  </>
+                )}
+              </Button>
+            </div>
+
+            <p className="text-xs text-gray-400 text-center mt-4">
+              Print or display the QR at your counter — every scan creates a fresh wallet pass.
+            </p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
-          <h3 className="font-semibold text-gray-900">Font</h3>
-          <div className="grid grid-cols-5 gap-2">
-            {FONTS.map((f) => (
-              <button
-                key={f.value}
-                type="button"
-                onClick={() => setFontChoice(f.value)}
-                className={`py-2 px-1 rounded-xl border-2 text-sm transition-all ${fontChoice === f.value ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 hover:border-gray-300'}`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <Button variant="primary" size="lg" onClick={handleSave} disabled={saving} className="w-full">
-          {saving ? 'Saving…' : 'Save changes'}
-        </Button>
-      </div>
-
-      {/* Live preview */}
-      <div className="lg:sticky lg:top-8 self-start space-y-6">
-        <div>
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Apple Wallet</p>
-          <AppleWalletPreview data={cardData} />
-        </div>
-        <div>
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Google Wallet</p>
-          <GoogleWalletPreview data={cardData} />
-        </div>
-      </div>
-    </div>
+      )}
+    </>
   )
 }

@@ -1,5 +1,5 @@
 import { GoogleAuth } from 'google-auth-library'
-import type { LoyaltyCard, Business, CustomerPass } from '@/lib/supabase/types'
+import type { LoyaltyCard, Business, CustomerPass } from '@/lib/types'
 
 const WALLET_API = 'https://walletobjects.googleapis.com/walletobjects/v1'
 
