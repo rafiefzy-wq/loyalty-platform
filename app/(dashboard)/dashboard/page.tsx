@@ -6,6 +6,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { Users, TrendingUp, Gift, QrCode, ArrowRight, Smartphone, Watch } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { QuickEditRewardButton } from './quick-edit-reward'
 import QRCode from 'qrcode'
 
 export const dynamic = 'force-dynamic'
@@ -77,20 +78,33 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="border-0 shadow-sm">
-          <CardHeader><CardTitle className="text-base">Counter QR Code</CardTitle></CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-base">Counter QR Code</CardTitle>
+            {activeCard && (
+              <QuickEditRewardButton
+                initialStampGoal={activeCard.stampGoal}
+                initialReward={activeCard.rewardDescription}
+              />
+            )}
+          </CardHeader>
           <CardContent className="flex flex-col items-center gap-3">
             {qrDataUrl ? (
               <>
                 <Image src={qrDataUrl} alt="Loyalty card QR code" width={160} height={160} className="rounded-lg" />
                 <p className="text-xs text-gray-400 text-center">Customers scan this to add your loyalty card</p>
                 {activeCard && (
-                  <Link
-                    href={`${appUrl}/pass/new?card=${activeCard._id}`}
-                    target="_blank"
-                    className="text-xs text-indigo-600 hover:underline"
-                  >
-                    Preview pass link ↗
-                  </Link>
+                  <>
+                    <div className="text-center text-xs space-y-0.5">
+                      <p className="text-gray-700"><span className="font-semibold">{activeCard.stampGoal}</span> stamps → <span className="font-semibold">{activeCard.rewardDescription}</span></p>
+                    </div>
+                    <Link
+                      href={`${appUrl}/pass/new?card=${activeCard._id}`}
+                      target="_blank"
+                      className="text-xs text-indigo-600 hover:underline"
+                    >
+                      Preview pass link ↗
+                    </Link>
+                  </>
                 )}
               </>
             ) : (
@@ -115,21 +129,33 @@ export default async function DashboardPage() {
             ) : (
               <div className="divide-y divide-gray-50">
                 {recentPasses.map((pass) => (
-                  <div key={pass.id} className="flex items-center justify-between py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      {deviceIcon(pass.device)}
-                      <div>
-                        <p className="text-sm font-medium text-gray-800">
-                          {pass.device === 'apple' ? 'Apple Wallet' : pass.device === 'google' ? 'Google Wallet' : 'Wallet pass'}
+                  <Link
+                    key={pass.id}
+                    href="/dashboard/customers"
+                    className="flex items-center justify-between py-2.5 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {pass.customerName ? (
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-700 flex-shrink-0">
+                          {pass.customerName.charAt(0).toUpperCase()}
+                        </div>
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          {deviceIcon(pass.device)}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-800 truncate">
+                          {pass.customerName || (pass.device === 'apple' ? 'Apple Wallet' : pass.device === 'google' ? 'Google Wallet' : 'Anonymous pass')}
                         </p>
                         <p className="text-xs text-gray-400">{timeAgo(pass.joinedAt)}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-700">{pass.stampCount} / {pass.stampGoal}</p>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-semibold text-gray-700 tabular-nums">{pass.stampCount} / {pass.stampGoal}</p>
                       <p className="text-xs text-gray-400">stamps</p>
                     </div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}

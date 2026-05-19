@@ -135,6 +135,32 @@ export const updateDesign = mutation({
   },
 })
 
+export const updateRewardQuick = mutation({
+  args: {
+    stampGoal: v.number(),
+    rewardDescription: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx)
+    if (!userId) throw new Error('Unauthorized')
+
+    const business = await ctx.db.query('businesses').withIndex('by_owner', q => q.eq('ownerId', userId)).first()
+    if (!business) throw new Error('Business not found')
+
+    const card = await ctx.db.query('loyaltyCards').withIndex('by_business', q => q.eq('businessId', business._id)).filter(q => q.eq(q.field('isActive'), true)).first()
+    if (!card) throw new Error('No active loyalty card')
+
+    if (args.stampGoal < 1 || args.stampGoal > 30) throw new Error('Stamp goal must be between 1 and 30')
+    const reward = args.rewardDescription.trim()
+    if (!reward) throw new Error('Reward description is required')
+
+    await ctx.db.patch(card._id, {
+      stampGoal: args.stampGoal,
+      rewardDescription: reward,
+    })
+  },
+})
+
 export const updateSettings = mutation({
   args: {
     name: v.optional(v.string()),

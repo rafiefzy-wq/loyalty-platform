@@ -25,6 +25,60 @@ export const getCardById = query({
   },
 })
 
+// Owner-only view of a single pass with its transaction history
+export const getPassDetail = query({
+  args: { passId: v.id('customerPasses') },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx)
+    if (!userId) return null
+
+    const pass = await ctx.db.get(args.passId)
+    if (!pass) return null
+
+    const card = await ctx.db.get(pass.loyaltyCardId)
+    if (!card) return null
+
+    // Authorization: only the business owner can see customer detail
+    const business = await ctx.db.get(card.businessId)
+    if (!business || (business as any).ownerId !== userId) return null
+
+    const transactions = await ctx.db
+      .query('stampTransactions')
+      .withIndex('by_customer_pass', q => q.eq('customerPassId', pass._id))
+      .order('desc')
+      .collect()
+
+    // Resolve unique location names
+    const uniqueLocIds = Array.from(new Set(transactions.map(t => t.locationId)))
+    const locDocs = await Promise.all(uniqueLocIds.map(id => ctx.db.get(id)))
+    const locMap = new Map<string, string>()
+    locDocs.forEach((l) => { if (l) locMap.set(l._id, (l as any).name) })
+
+    return {
+      pass: {
+        id: pass._id,
+        customerName: pass.customerName ?? null,
+        stampCount: pass.stampCount,
+        device: pass.customerDevice ?? null,
+        joinedAt: pass._creationTime,
+        lastVisitedAt: pass.lastVisitedAt ?? null,
+        applePassSerial: pass.applePassSerial ?? null,
+        googlePassId: pass.googlePassId ?? null,
+      },
+      card: {
+        stampGoal: card.stampGoal,
+        rewardDescription: card.rewardDescription,
+      },
+      transactions: transactions.map(t => ({
+        id: t._id,
+        type: t.type,
+        createdAt: t._creationTime,
+        locationName: locMap.get(t.locationId as unknown as string) ?? 'Unknown',
+      })),
+    }
+  },
+})
+
 export const createPass = mutation({
   args: { cardId: v.id('loyaltyCards') },
   handler: async (ctx, args) => {

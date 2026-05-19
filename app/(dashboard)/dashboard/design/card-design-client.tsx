@@ -3,15 +3,13 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import QRCode from 'qrcode'
-import { useMutation } from 'convex/react'
-import { api } from '@/convex/_generated/api'
 import type { Business, LoyaltyCard } from '@/lib/types'
 import { toast } from '@/lib/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AppleWalletPreview, GoogleWalletPreview } from '@/components/wallet-preview/wallet-card-preview'
-import { Download, X, Smartphone, Copy, Check, UserPlus } from 'lucide-react'
+import { Download, X, Smartphone, Copy, Check } from 'lucide-react'
 
 const FONTS = [
   { value: 'inter', label: 'Inter' },
@@ -36,7 +34,6 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
   const [rewardDescription, setRewardDescription] = useState(loyaltyCard?.reward_description || '1 free item')
   const [logoUrl, setLogoUrl] = useState(business.logo_url || '')
   const [stripImageUrl, setStripImageUrl] = useState(loyaltyCard?.strip_image_url || '')
-  const [customerName, setCustomerName] = useState('')
   const [saving, setSaving] = useState(false)
 
   // QR modal state
@@ -44,9 +41,6 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [passUrl, setPassUrl] = useState('')
   const [copied, setCopied] = useState(false)
-  const [savedCustomerName, setSavedCustomerName] = useState('')
-
-  const createNamedPass = useMutation(api.passes.createNamedPass)
 
   const cardData = {
     businessName: name,
@@ -64,7 +58,6 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
   async function handleSave() {
     setSaving(true)
     try {
-      // 1. Save the card design itself
       const res = await fetch('/api/businesses/design', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -84,29 +77,14 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
         toast({ title: 'Save failed', variant: 'destructive' })
         return
       }
+      toast({ title: 'Card design saved!', variant: 'success' })
 
       if (!loyaltyCard?.id) {
         toast({ title: 'No active loyalty card — please complete onboarding first', variant: 'destructive' })
         return
       }
 
-      // 2. If a customer name was entered, create a customer pass record
-      const trimmedName = customerName.trim()
-      if (trimmedName) {
-        try {
-          await createNamedPass({ customerName: trimmedName })
-          toast({ title: `Saved! "${trimmedName}" added to Customers.`, variant: 'success' })
-          setSavedCustomerName(trimmedName)
-          setCustomerName('')
-        } catch (err) {
-          toast({ title: (err as Error).message || 'Could not add customer', variant: 'destructive' })
-        }
-      } else {
-        toast({ title: 'Card design saved!', variant: 'success' })
-        setSavedCustomerName('')
-      }
-
-      // 3. Generate QR pointing at the pass-creation URL (always)
+      // Generate QR pointing at the pass-creation URL
       const url = `${window.location.origin}/pass/new?card=${loyaltyCard.id}`
       const dataUrl = await QRCode.toDataURL(url, {
         width: 320,
@@ -186,23 +164,6 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
-            <div className="flex items-center gap-2">
-              <UserPlus className="w-4 h-4 text-indigo-600" />
-              <h3 className="font-semibold text-gray-900">Customer name</h3>
-              <span className="text-xs text-gray-400">(optional)</span>
-            </div>
-            <p className="text-xs text-gray-500 -mt-1">
-              Add a name here to immediately register a customer pass when you save. They&apos;ll appear in the Customers list.
-            </p>
-            <Input
-              placeholder="e.g. John Doe"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              maxLength={60}
-            />
-          </div>
-
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
             <h3 className="font-semibold text-gray-900">Font</h3>
             <div className="grid grid-cols-5 gap-2">
               {FONTS.map((f) => (
@@ -263,12 +224,6 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
                 <Smartphone className="w-4 h-4" />
                 Customers scan to add it to Apple or Google Wallet
               </p>
-              {savedCustomerName && (
-                <div className="mt-3 inline-flex items-center gap-1.5 bg-green-50 border border-green-200 text-green-700 text-xs font-medium px-3 py-1.5 rounded-full">
-                  <Check className="w-3.5 h-3.5" />
-                  <span>&ldquo;{savedCustomerName}&rdquo; added to Customers</span>
-                </div>
-              )}
             </div>
 
             {qrDataUrl && (
