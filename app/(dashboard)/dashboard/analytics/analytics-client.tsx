@@ -35,8 +35,8 @@ export function AnalyticsClient({ chartData, deviceCounts, totalPasses, totalSta
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-        <p className="text-gray-500 text-sm mt-1">Last 30 days</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Analytics</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Last 30 days</p>
       </div>
 
       {/* Summary stats */}
@@ -48,8 +48,8 @@ export function AnalyticsClient({ chartData, deviceCounts, totalPasses, totalSta
         ].map((s) => (
           <Card key={s.label} className="border-0 shadow-sm">
             <CardContent className="p-5">
-              <p className="text-2xl font-bold text-gray-900">{s.value.toLocaleString()}</p>
-              <p className="text-sm text-gray-500 mt-0.5">{s.label}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.value.toLocaleString()}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{s.label}</p>
             </CardContent>
           </Card>
         ))}

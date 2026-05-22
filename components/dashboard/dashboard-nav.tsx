@@ -19,6 +19,8 @@ import {
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { useMyRole } from '@/lib/hooks/use-role'
+import { Sparkles, CreditCard } from 'lucide-react'
 
 interface Business {
   name: string
@@ -27,21 +29,41 @@ interface Business {
   plan: string
 }
 
-const navItems = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/customers', label: 'Customers', icon: Users },
-  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
-  { href: '/dashboard/design', label: 'Card Design', icon: Palette },
-  { href: '/dashboard/team', label: 'Team', icon: UserPlus },
-  { href: '/dashboard/broadcast', label: 'Broadcast', icon: Bell },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+type Role = 'owner' | 'manager' | 'staff'
+
+// Each nav item declares which roles can see it.
+// 'owner' is the most privileged; managers can see most things except billing.
+const navItems: Array<{
+  href: string
+  label: string
+  icon: typeof LayoutDashboard
+  exact?: boolean
+  minRole: Role
+}> = [
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true, minRole: 'staff' },
+  { href: '/dashboard/customers', label: 'Customers', icon: Users, minRole: 'staff' },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3, minRole: 'manager' },
+  { href: '/dashboard/programs', label: 'Programs', icon: Sparkles, minRole: 'owner' },
+  { href: '/dashboard/design', label: 'Card Design', icon: Palette, minRole: 'owner' },
+  { href: '/dashboard/team', label: 'Team', icon: UserPlus, minRole: 'owner' },
+  { href: '/dashboard/broadcast', label: 'Broadcast', icon: Bell, minRole: 'manager' },
+  { href: '/dashboard/billing', label: 'Billing', icon: CreditCard, minRole: 'owner' },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, minRole: 'owner' },
 ]
+
+const ROLE_RANK: Record<Role, number> = { staff: 0, manager: 1, owner: 2 }
 
 export function DashboardNav({ business }: { business: Business }) {
   const pathname = usePathname()
   const router = useRouter()
   const { signOut } = useAuthActions()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { role } = useMyRole()
+
+  // Until role resolves, default to staff visibility (least items shown).
+  // After it loads, show everything the role permits.
+  const userRank = role ? ROLE_RANK[role] : ROLE_RANK.staff
+  const visibleNav = navItems.filter((item) => userRank >= ROLE_RANK[item.minRole])
 
   async function handleLogout() {
     await signOut()
@@ -75,12 +97,24 @@ export function DashboardNav({ business }: { business: Business }) {
           </div>
         )}
         <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm mt-1 leading-tight">{business.name}</p>
-        <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{business.plan.replace('_', ' ')}</p>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <p className="text-xs text-gray-400 dark:text-gray-500 capitalize">{business.plan.replace('_', ' ')}</p>
+          {role && (
+            <span className={cn(
+              'text-[10px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded',
+              role === 'owner' && 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
+              role === 'manager' && 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+              role === 'staff' && 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+            )}>
+              {role}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Nav links */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map((item) => (
+        {visibleNav.map((item) => (
           <Link
             key={item.href}
             href={item.href}

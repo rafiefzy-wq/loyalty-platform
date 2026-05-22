@@ -60,8 +60,8 @@ export function SettingsClient({ business, locations: initialLocations }: Props)
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-500 text-sm mt-1">Manage your business profile and locations</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Manage your business profile and locations</p>
       </div>
 
       {/* Business profile */}
@@ -75,7 +75,7 @@ export function SettingsClient({ business, locations: initialLocations }: Props)
             <Input value={businessName} onChange={(e) => setBusinessName(e.target.value)} />
           </div>
           <div className="flex items-center gap-3">
-            <div className="text-sm text-gray-500">Plan: <span className="font-medium text-gray-900 capitalize">{business.plan.replace('_', ' ')}</span></div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Plan: <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">{business.plan.replace('_', ' ')}</span></div>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
               {business.plan === 'free_trial' ? 'Free Trial' : 'Active'}
             </span>
@@ -99,7 +99,7 @@ export function SettingsClient({ business, locations: initialLocations }: Props)
         </CardHeader>
         <CardContent className="space-y-3">
           {addingLocation && (
-            <div className="p-4 rounded-xl bg-gray-50 border border-gray-200 space-y-3">
+            <div className="p-4 rounded-xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div className="col-span-2 space-y-1">
                   <Label>Location name</Label>
@@ -122,10 +122,10 @@ export function SettingsClient({ business, locations: initialLocations }: Props)
           )}
 
           {locations.map((loc) => (
-            <div key={loc.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-white">
+            <div key={loc.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#16161e]">
               <div>
-                <p className="text-sm font-medium text-gray-900">{loc.name}</p>
-                <p className="text-xs text-gray-500">{[loc.city, loc.country].filter(Boolean).join(', ')}</p>
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{loc.name}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{[loc.city, loc.country].filter(Boolean).join(', ')}</p>
               </div>
               {locations.length > 1 && (
                 <button onClick={() => deleteLocation(loc.id)} className="text-red-400 hover:text-red-600 p-1">
@@ -140,8 +140,8 @@ export function SettingsClient({ business, locations: initialLocations }: Props)
       {/* Billing placeholder */}
       <Card className="border-0 shadow-sm bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-100">
         <CardContent className="p-6">
-          <h3 className="font-semibold text-gray-900 mb-1">Upgrade your plan</h3>
-          <p className="text-sm text-gray-600 mb-4">
+          <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-1">Upgrade your plan</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             You're on the Free Trial. Upgrade to unlock unlimited customers, analytics, and team members.
           </p>
           <Button variant="primary" disabled>

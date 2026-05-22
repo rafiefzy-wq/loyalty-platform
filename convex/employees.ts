@@ -2,6 +2,21 @@ import { mutation, query } from './_generated/server'
 import { v } from 'convex/values'
 import { getAuthUserId } from '@convex-dev/auth/server'
 
+// Returns the role for the authenticated user — used by client UI gating.
+// 'owner' if they own any business, otherwise their employee role, else null.
+export const getMyRole = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx)
+    if (!userId) return null
+    const owned = await ctx.db.query('businesses').withIndex('by_owner', q => q.eq('ownerId', userId)).first()
+    if (owned) return 'owner' as const
+    const employee = await ctx.db.query('employees').withIndex('by_user', q => q.eq('userId', userId)).first()
+    if (employee && employee.isActive) return employee.role as 'manager' | 'staff'
+    return null
+  },
+})
+
 export const getMyEmployee = query({
   args: {},
   handler: async (ctx) => {

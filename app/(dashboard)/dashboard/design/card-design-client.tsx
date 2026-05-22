@@ -127,8 +127,8 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
         {/* Controls */}
         <div className="space-y-5">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Card Design</h1>
-            <p className="text-gray-500 text-sm mt-1">Changes update the preview live</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Card Design</h1>
+            <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Changes update the preview live</p>
           </div>
 
           <div className="bg-white dark:bg-[#16161e] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 space-y-4">
@@ -168,8 +168,8 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-            <h3 className="font-semibold text-gray-900">Colors</h3>
+          <div className="bg-white dark:bg-[#16161e] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 space-y-4">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Colors</h3>
             <div className="grid grid-cols-2 gap-4">
               {[
                 { label: 'Background', value: brandColor, set: setBrandColor },
@@ -177,9 +177,9 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
                 { label: 'Label text', value: labelColor, set: setLabelColor },
               ].map(({ label, value, set }) => (
                 <div key={label} className="flex items-center gap-3">
-                  <input type="color" value={value} onChange={(e) => set(e.target.value)} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer p-0.5" />
+                  <input type="color" value={value} onChange={(e) => set(e.target.value)} className="w-10 h-10 rounded-lg border border-gray-200 dark:border-gray-800 cursor-pointer p-0.5" />
                   <div>
-                    <p className="text-xs text-gray-500">{label}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
                     <p className="text-sm font-mono">{value}</p>
                   </div>
                 </div>
@@ -187,15 +187,15 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
-            <h3 className="font-semibold text-gray-900">Font</h3>
+          <div className="bg-white dark:bg-[#16161e] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 space-y-3">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Font</h3>
             <div className="grid grid-cols-5 gap-2">
               {FONTS.map((f) => (
                 <button
                   key={f.value}
                   type="button"
                   onClick={() => setFontChoice(f.value)}
-                  className={`py-2 px-1 rounded-xl border-2 text-sm transition-all ${fontChoice === f.value ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 hover:border-gray-300'}`}
+                  className={`py-2 px-1 rounded-xl border-2 text-sm transition-all ${fontChoice === f.value ? 'border-indigo-600 bg-indigo-50 text-indigo-700' : 'border-gray-200 dark:border-gray-800 hover:border-gray-300'}`}
                 >
                   {f.label}
                 </button>
@@ -211,11 +211,11 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
         {/* Live preview */}
         <div className="lg:sticky lg:top-8 self-start space-y-6">
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Apple Wallet</p>
+            <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">Apple Wallet</p>
             <AppleWalletPreview data={cardData} />
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-widest mb-3">Google Wallet</p>
+            <p className="text-xs font-medium text-gray-400 dark:text-gray-500 uppercase tracking-widest mb-3">Google Wallet</p>
             <GoogleWalletPreview data={cardData} />
           </div>
         </div>
@@ -231,20 +231,20 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
           aria-labelledby="qr-modal-title"
         >
           <div
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200"
+            className="bg-white dark:bg-[#16161e] rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => setQrOpen(false)}
               aria-label="Close"
-              className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+              className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:bg-gray-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="text-center mb-5">
-              <h2 id="qr-modal-title" className="text-xl font-bold text-gray-900">Your loyalty card QR</h2>
-              <p className="text-sm text-gray-500 mt-1 flex items-center justify-center gap-1.5">
+              <h2 id="qr-modal-title" className="text-xl font-bold text-gray-900 dark:text-gray-100">Your loyalty card QR</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 flex items-center justify-center gap-1.5">
                 <Smartphone className="w-4 h-4" />
                 Customers scan to add it to Apple or Google Wallet
               </p>
@@ -252,15 +252,15 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
 
             {qrDataUrl && (
               <div className="flex justify-center mb-5">
-                <div className="bg-white border-2 border-gray-100 rounded-2xl p-4">
+                <div className="bg-white dark:bg-[#16161e] border-2 border-gray-100 dark:border-gray-800 rounded-2xl p-4">
                   <Image src={qrDataUrl} alt="Loyalty card QR code" width={240} height={240} unoptimized />
                 </div>
               </div>
             )}
 
-            <div className="bg-gray-50 rounded-xl p-3 mb-5">
-              <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Pass link</p>
-              <p className="text-xs font-mono text-gray-700 break-all leading-relaxed">{passUrl}</p>
+            <div className="bg-gray-50 dark:bg-gray-900/40 rounded-xl p-3 mb-5">
+              <p className="text-xs text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-1">Pass link</p>
+              <p className="text-xs font-mono text-gray-700 dark:text-gray-300 break-all leading-relaxed">{passUrl}</p>
             </div>
 
             <div className="flex gap-2">
@@ -283,7 +283,7 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
               </Button>
             </div>
 
-            <p className="text-xs text-gray-400 text-center mt-4">
+            <p className="text-xs text-gray-400 dark:text-gray-500 text-center mt-4">
               Print or display the QR at your counter — every scan creates a fresh wallet pass.
             </p>
           </div>

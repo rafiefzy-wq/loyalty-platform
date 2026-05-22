@@ -37,8 +37,8 @@ export default function BroadcastPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Push Notifications</h1>
-        <p className="text-gray-500 text-sm mt-1">Send a message to all your loyalty card holders</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Push Notifications</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Send a message to all your loyalty card holders</p>
       </div>
 
       <Card className="border-0 shadow-sm">
@@ -62,7 +62,7 @@ export default function BroadcastPage() {
                 maxLength={50}
                 required
               />
-              <p className="text-xs text-gray-400">{title.length}/50</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{title.length}/50</p>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="notif-body">Message</Label>
@@ -74,21 +74,21 @@ export default function BroadcastPage() {
                 maxLength={200}
                 rows={3}
                 required
-                className="flex w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 resize-none"
+                className="flex w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16161e] px-3 py-2 text-sm ring-offset-white placeholder:text-gray-400 dark:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 resize-none"
               />
-              <p className="text-xs text-gray-400">{message.length}/200</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500">{message.length}/200</p>
             </div>
 
             {/* Notification preview */}
-            <div className="rounded-2xl bg-gray-50 border border-gray-200 p-4">
-              <p className="text-xs text-gray-400 mb-2 uppercase tracking-widest">Preview</p>
-              <div className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-start gap-3">
+            <div className="rounded-2xl bg-gray-50 dark:bg-gray-900/40 border border-gray-200 dark:border-gray-800 p-4">
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 uppercase tracking-widest">Preview</p>
+              <div className="bg-white dark:bg-[#16161e] rounded-xl shadow-sm px-4 py-3 flex items-start gap-3">
                 <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center flex-shrink-0 text-white text-sm font-bold">
                   🎫
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">{title || 'Notification title'}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{message || 'Your message appears here'}</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title || 'Notification title'}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{message || 'Your message appears here'}</p>
                 </div>
               </div>
             </div>

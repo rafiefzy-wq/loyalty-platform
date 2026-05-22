@@ -34,6 +34,7 @@ export default defineSchema({
 
   loyaltyCards: defineTable({
     businessId: v.id('businesses'),
+    name: v.optional(v.string()),          // Program name e.g. "Coffee", "Pastry"
     stampGoal: v.number(),
     rewardDescription: v.string(),
     cardScope: v.string(),

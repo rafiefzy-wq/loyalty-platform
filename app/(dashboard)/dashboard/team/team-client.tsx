@@ -20,7 +20,7 @@ const ROLES = ['staff', 'manager', 'owner']
 const roleColors: Record<string, string> = {
   owner: 'bg-purple-100 text-purple-700',
   manager: 'bg-blue-100 text-blue-700',
-  staff: 'bg-gray-100 text-gray-700',
+  staff: 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300',
 }
 
 export function TeamClient({ employees, invitations, locations, businessId }: Props) {
@@ -61,8 +61,8 @@ export function TeamClient({ employees, invitations, locations, businessId }: Pr
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Team Management</h1>
-        <p className="text-gray-500 text-sm mt-1">Invite employees to stamp cards from their phones</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Team Management</h1>
+        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Invite employees to stamp cards from their phones</p>
       </div>
 
       {/* Invite form */}
@@ -91,7 +91,7 @@ export function TeamClient({ employees, invitations, locations, businessId }: Pr
                 id="inv-role"
                 value={inviteRole}
                 onChange={(e) => setInviteRole(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16161e] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 {ROLES.map((r) => <option key={r} value={r} className="capitalize">{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
               </select>
@@ -102,7 +102,7 @@ export function TeamClient({ employees, invitations, locations, businessId }: Pr
                 id="inv-loc"
                 value={inviteLocationId}
                 onChange={(e) => setInviteLocationId(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                className="flex h-10 w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#16161e] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
               >
                 <option value="">All locations</option>
                 {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -124,7 +124,7 @@ export function TeamClient({ employees, invitations, locations, businessId }: Pr
           <CardTitle className="text-base">Team Members ({employees.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="divide-y divide-gray-50">
+          <div className="divide-y divide-gray-50 dark:divide-gray-800">
             {employees.map((emp) => (
               <div key={emp.id} className="flex items-center justify-between py-3">
                 <div className="flex items-center gap-3">
@@ -134,17 +134,17 @@ export function TeamClient({ employees, invitations, locations, businessId }: Pr
                     </span>
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{emp.name || 'Unnamed'}</p>
-                    <p className="text-xs text-gray-500">{emp.email}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{emp.name || 'Unnamed'}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{emp.email}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   {emp.location_id && (
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
                       {locations.find((l) => l.id === emp.location_id)?.name || 'Location'}
                     </span>
                   )}
-                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${roleColors[emp.role] || 'bg-gray-100 text-gray-700'}`}>
+                  <span className={`text-xs font-medium px-2.5 py-1 rounded-full capitalize ${roleColors[emp.role] || 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'}`}>
                     {emp.role}
                   </span>
                 </div>
@@ -161,12 +161,12 @@ export function TeamClient({ employees, invitations, locations, businessId }: Pr
             <CardTitle className="text-base">Pending Invitations</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="divide-y divide-gray-50">
+            <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {pendingInvites.map((inv) => (
                 <div key={inv.id} className="flex items-center justify-between py-3">
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{inv.email}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{inv.email}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
                       {inv.role} · Expires {new Date(inv.expires_at).toLocaleDateString()}
                     </p>
                   </div>
