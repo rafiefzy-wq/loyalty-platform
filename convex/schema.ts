@@ -38,7 +38,9 @@ export default defineSchema({
     stampGoal: v.number(),
     rewardDescription: v.string(),
     cardScope: v.string(),
-    isActive: v.boolean(),
+    isActive: v.boolean(),                  // Legacy: kept for back-compat with existing queries
+    // 'active' = currently running, 'draft' = not yet published, 'archived' = retired/read-only
+    status: v.optional(v.union(v.literal('active'), v.literal('draft'), v.literal('archived'))),
     stripImageUrl: v.optional(v.string()),
     iconUrl: v.optional(v.string()),
     backgroundColor: v.string(),
