@@ -2,6 +2,10 @@
 import { action } from './_generated/server'
 import { v } from 'convex/values'
 import { api } from './_generated/api'
+// Static imports — dynamic `await import()` returns a CJS namespace object
+// in Convex's Node runtime, which breaks `new GoogleAuth(...)` ("e is not a constructor")
+import { GoogleAuth } from 'google-auth-library'
+import jwt from 'jsonwebtoken'
 
 export const createGoogleWalletPass = action({
   args: {
@@ -23,10 +27,18 @@ export const createGoogleWalletPass = action({
       return null
     }
 
-    try {
-      const { GoogleAuth } = await import('google-auth-library')
-      const jwt = await import('jsonwebtoken')
+    // Google Wallet API issuer IDs are numeric (e.g. "3388000000022123456").
+    // Reject non-numeric IDs early with a clear error rather than getting a
+    // confusing "not a valid id" from Google's API mid-flight.
+    if (!/^\d+$/.test(issuerId)) {
+      console.error(
+        `[google-wallet] GOOGLE_WALLET_ISSUER_ID must be numeric. Got "${issuerId}".\n` +
+        `Get the correct numeric issuer ID at https://pay.google.com/business/console (Google Wallet API issuer console).`
+      )
+      return null
+    }
 
+    try {
       const credJson = Buffer.from(serviceAccountB64, 'base64').toString('utf8')
       const credentials = JSON.parse(credJson)
       const classId = `${issuerId}.loyalty_${card._id}`
@@ -108,7 +120,7 @@ export const createGoogleWalletPass = action({
         payload: { loyaltyObjects: [{ id: objectId }] },
         iat: Math.floor(Date.now() / 1000),
       }
-      const token = (jwt as any).sign(claims, credentials.private_key, { algorithm: 'RS256' })
+      const token = jwt.sign(claims, credentials.private_key, { algorithm: 'RS256' })
 
       // Save googlePassId back to the pass so the regular /pass/[id] route can rebuild the link
       await ctx.runMutation(api.passes.updateGooglePassId, {
@@ -135,7 +147,6 @@ export const updateGoogleWalletPass = action({
     if (!data?.pass.googlePassId) return
 
     try {
-      const { GoogleAuth } = await import('google-auth-library')
       const credJson = Buffer.from(process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_BASE64!, 'base64').toString('utf8')
       const credentials = JSON.parse(credJson)
       const WALLET_API = 'https://walletobjects.googleapis.com/walletobjects/v1'
@@ -152,6 +163,8 @@ export const updateGoogleWalletPass = action({
           secondaryLoyaltyPoints: { label: 'Reward', balance: { string: isRewardReady ? '🎉 Ready!' : card.rewardDescription } },
         },
       })
-    } catch {}
+    } catch (err: any) {
+      console.error('[google-wallet] update failed:', err?.message || err)
+    }
   },
 })

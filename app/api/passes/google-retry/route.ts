@@ -17,6 +17,15 @@ export async function POST(request: NextRequest) {
       passId: passId as Id<'customerPasses'>,
       appUrl,
     })
+    if (!googleWalletUrl) {
+      return NextResponse.json(
+        {
+          googleWalletUrl: null,
+          reason: 'Google Wallet integration is not fully configured for this business. The owner needs a valid Google Wallet API issuer ID — see https://pay.google.com/business/console',
+        },
+        { status: 200 },
+      )
+    }
     return NextResponse.json({ googleWalletUrl })
   } catch (err: any) {
     console.error('[google-retry] failed:', err?.message || err)

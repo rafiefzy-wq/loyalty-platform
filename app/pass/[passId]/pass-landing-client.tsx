@@ -18,6 +18,7 @@ export function PassLandingClient({ pass, loyaltyCard, business, isIOS, applePas
   const [retryAttempted, setRetryAttempted] = useState(false)
   const [retrying, setRetrying] = useState(false)
   const [retriedGoogleUrl, setRetriedGoogleUrl] = useState<string | null>(null)
+  const [retryReason, setRetryReason] = useState<string | null>(null)
   const effectiveGoogleUrl = retriedGoogleUrl ?? googleWalletUrl
 
   const cardData = {
@@ -36,15 +37,20 @@ export function PassLandingClient({ pass, loyaltyCard, business, isIOS, applePas
   async function retryGoogleWallet() {
     setRetrying(true)
     setRetryAttempted(true)
+    setRetryReason(null)
     try {
-      // Re-trigger Google Wallet creation for this existing pass via the create endpoint —
-      // the API route is idempotent on existing googlePassId.
       const res = await fetch(`/api/passes/google-retry?pass=${pass.id}`, { method: 'POST' })
       if (res.ok) {
-        const { googleWalletUrl: url } = await res.json()
+        const { googleWalletUrl: url, reason } = await res.json()
         if (url) setRetriedGoogleUrl(url)
+        else if (reason) setRetryReason(reason)
+      } else {
+        const { error } = await res.json().catch(() => ({ error: null }))
+        if (error) setRetryReason(error)
       }
-    } catch {}
+    } catch (err) {
+      setRetryReason((err as Error).message)
+    }
     setRetrying(false)
   }
 
@@ -154,9 +160,12 @@ export function PassLandingClient({ pass, loyaltyCard, business, isIOS, applePas
         )}
 
         {retryAttempted && !effectiveGoogleUrl && !retrying && (
-          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-center">
-            Google Wallet integration is still being configured. Try again in a moment — Apple Wallet works right now.
-          </p>
+          <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+            <p className="font-semibold mb-1">Google Wallet not available</p>
+            <p className="text-amber-700">
+              {retryReason || 'This business hasn\'t finished setting up Google Wallet yet. Apple Wallet works right now.'}
+            </p>
+          </div>
         )}
       </div>
 
