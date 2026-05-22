@@ -40,9 +40,9 @@ export default async function DashboardPage() {
   ]
 
   function deviceIcon(device: string) {
-    if (device === 'apple') return <Watch className="w-4 h-4 text-gray-500" />
-    if (device === 'google') return <Smartphone className="w-4 h-4 text-gray-500" />
-    return <Smartphone className="w-4 h-4 text-gray-400" />
+    if (device === 'apple') return <Watch className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" />
+    if (device === 'google') return <Smartphone className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" />
+    return <Smartphone className="w-4 h-4 text-gray-400 dark:text-gray-500" />
   }
 
   function timeAgo(ms: number) {
@@ -59,8 +59,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Overview</h1>
-        <p className="text-gray-500 text-sm mt-1">Welcome back to {business.name}</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Overview</h1>
+        <p className="text-gray-500 dark:text-gray-400 dark:text-gray-500 text-sm mt-1">Welcome back to {business.name}</p>
       </div>
 
       {/* Stat cards */}
@@ -71,8 +71,8 @@ export default async function DashboardPage() {
               <div className={`w-10 h-10 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
                 <s.icon className={`w-5 h-5 ${s.color}`} />
               </div>
-              <p className="text-2xl font-bold text-gray-900">{s.value.toLocaleString()}</p>
-              <p className="text-sm text-gray-500 mt-0.5">{s.label}</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.value.toLocaleString()}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-0.5">{s.label}</p>
             </CardContent>
           </Card>
         ))}
@@ -94,11 +94,11 @@ export default async function DashboardPage() {
             {qrDataUrl ? (
               <>
                 <Image src={qrDataUrl} alt="Loyalty card QR code" width={160} height={160} className="rounded-lg" />
-                <p className="text-xs text-gray-400 text-center">Customers scan this to add your loyalty card</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 text-center">Customers scan this to add your loyalty card</p>
                 {activeCard && (
                   <>
                     <div className="text-center text-xs space-y-0.5">
-                      <p className="text-gray-700"><span className="font-semibold">{activeCard.stampGoal}</span> stamps → <span className="font-semibold">{activeCard.rewardDescription}</span></p>
+                      <p className="text-gray-700 dark:text-gray-300"><span className="font-semibold">{activeCard.stampGoal}</span> stamps → <span className="font-semibold">{activeCard.rewardDescription}</span></p>
                     </div>
                     <Link
                       href={`${appUrl}/pass/new?card=${activeCard._id}`}
@@ -111,7 +111,7 @@ export default async function DashboardPage() {
                 )}
               </>
             ) : (
-              <p className="text-sm text-gray-400 py-8 text-center">No active loyalty card found</p>
+              <p className="text-sm text-gray-400 dark:text-gray-500 py-8 text-center">No active loyalty card found</p>
             )}
           </CardContent>
         </Card>
@@ -127,15 +127,15 @@ export default async function DashboardPage() {
             {recentPasses.length === 0 ? (
               <div className="text-center py-8">
                 <p className="text-3xl mb-2">👥</p>
-                <p className="text-sm text-gray-500">Share your QR code to get started!</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 dark:text-gray-500">Share your QR code to get started!</p>
               </div>
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-gray-50 dark:divide-gray-800">
                 {recentPasses.map((pass) => (
                   <Link
                     key={pass.id}
                     href="/dashboard/customers"
-                    className="flex items-center justify-between py-2.5 hover:bg-gray-50 -mx-2 px-2 rounded-lg transition-colors"
+                    className="flex items-center justify-between py-2.5 hover:bg-gray-50 dark:hover:bg-gray-800/50 -mx-2 px-2 rounded-lg transition-colors"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {pass.customerName ? (
@@ -148,15 +148,15 @@ export default async function DashboardPage() {
                         </div>
                       )}
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-800 truncate">
+                        <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">
                           {pass.customerName || (pass.device === 'apple' ? 'Apple Wallet' : pass.device === 'google' ? 'Google Wallet' : 'Anonymous pass')}
                         </p>
-                        <p className="text-xs text-gray-400">{timeAgo(pass.joinedAt)}</p>
+                        <p className="text-xs text-gray-400 dark:text-gray-500">{timeAgo(pass.joinedAt)}</p>
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-sm font-semibold text-gray-700 tabular-nums">{pass.stampCount} / {pass.stampGoal}</p>
-                      <p className="text-xs text-gray-400">stamps</p>
+                      <p className="text-sm font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{pass.stampCount} / {pass.stampGoal}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">stamps</p>
                     </div>
                   </Link>
                 ))}
@@ -175,7 +175,7 @@ export default async function DashboardPage() {
                 <MapPin className="w-4 h-4 text-indigo-600" />
                 Location breakdown
               </CardTitle>
-              <p className="text-xs text-gray-500 mt-0.5">Stamps and redemptions per location</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 dark:text-gray-500 mt-0.5">Stamps and redemptions per location</p>
             </div>
             <Link href="/dashboard/settings" className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
               Manage locations <ArrowRight className="w-3 h-3" />
@@ -184,11 +184,11 @@ export default async function DashboardPage() {
           <CardContent>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {locationStats.map((loc) => (
-                <div key={loc.id} className="rounded-xl border border-gray-100 p-4 hover:border-indigo-200 transition-colors">
+                <div key={loc.id} className="rounded-xl border border-gray-100 dark:border-gray-800 p-4 hover:border-indigo-200 transition-colors">
                   <div className="flex items-start justify-between mb-2.5">
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900 truncate">{loc.name}</p>
-                      {loc.city && <p className="text-xs text-gray-400">{loc.city}</p>}
+                      <p className="font-semibold text-gray-900 dark:text-gray-100 truncate">{loc.name}</p>
+                      {loc.city && <p className="text-xs text-gray-400 dark:text-gray-500">{loc.city}</p>}
                     </div>
                     {loc.recentRedemptions > 0 && (
                       <span
@@ -202,11 +202,11 @@ export default async function DashboardPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400">Stamps</p>
-                      <p className="text-lg font-bold text-gray-900 tabular-nums">{loc.stamps}</p>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500">Stamps</p>
+                      <p className="text-lg font-bold text-gray-900 dark:text-gray-100 tabular-nums">{loc.stamps}</p>
                     </div>
                     <div>
-                      <p className="text-[10px] uppercase tracking-wider text-gray-400">Redeemed</p>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400 dark:text-gray-500">Redeemed</p>
                       <p className="text-lg font-bold text-yellow-600 tabular-nums">{loc.redemptions}</p>
                     </div>
                   </div>

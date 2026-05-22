@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { AppleWalletPreview, GoogleWalletPreview } from '@/components/wallet-preview/wallet-card-preview'
+import { ImageUpload } from '@/components/image-upload'
 import { Download, X, Smartphone, Copy, Check } from 'lucide-react'
 
 const FONTS = [
@@ -130,8 +131,31 @@ export function CardDesignClient({ business, loyaltyCard }: Props) {
             <p className="text-gray-500 text-sm mt-1">Changes update the preview live</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
-            <h3 className="font-semibold text-gray-900">Stamp settings</h3>
+          <div className="bg-white dark:bg-[#16161e] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 space-y-4">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Branding images</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">Logo shows as the card icon. Strip image is the banner at the top of Apple Wallet cards.</p>
+            <div className="flex flex-wrap gap-6">
+              <ImageUpload
+                label="Logo"
+                target="logo"
+                aspect="square"
+                currentUrl={logoUrl || null}
+                onUploaded={(url) => setLogoUrl(url)}
+                helpText="Square, PNG/JPG, max 4 MB"
+              />
+              <ImageUpload
+                label="Strip image (Apple)"
+                target="strip"
+                aspect="banner"
+                currentUrl={stripImageUrl || null}
+                onUploaded={(url) => setStripImageUrl(url)}
+                helpText="Wide banner, max 4 MB"
+              />
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-[#16161e] rounded-2xl border border-gray-100 dark:border-gray-800 p-5 space-y-4">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100">Stamp settings</h3>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Stamps needed</Label>

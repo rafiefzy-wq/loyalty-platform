@@ -28,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0f] flex transition-colors">
       <DashboardNav business={navBusiness as any} />
       <main className="flex-1 min-w-0 lg:ml-64">
         <div className="px-6 py-8 max-w-6xl mx-auto">{children}</div>

@@ -13,7 +13,9 @@ import type * as businesses from "../businesses.js";
 import type * as employees from "../employees.js";
 import type * as http from "../http.js";
 import type * as locations from "../locations.js";
+import type * as notifications from "../notifications.js";
 import type * as passes from "../passes.js";
+import type * as storage from "../storage.js";
 import type * as walletActions from "../walletActions.js";
 
 import type {
@@ -28,7 +30,9 @@ declare const fullApi: ApiFromModules<{
   employees: typeof employees;
   http: typeof http;
   locations: typeof locations;
+  notifications: typeof notifications;
   passes: typeof passes;
+  storage: typeof storage;
   walletActions: typeof walletActions;
 }>;
 

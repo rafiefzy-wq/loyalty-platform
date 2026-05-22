@@ -1,6 +1,6 @@
 import { mutation, query, action } from './_generated/server'
 import { v } from 'convex/values'
-import { api } from './_generated/api'
+import { api, internal } from './_generated/api'
 import { getAuthUserId } from '@convex-dev/auth/server'
 
 export const getPass = query({
@@ -340,5 +340,28 @@ export const redeemReward = mutation({
       employeeId: args.employeeId,
       type: 'reward_redeemed',
     })
+
+    // Best-effort email notification to the business owner.
+    // Scheduled as a separate action so the mutation succeeds even if email fails.
+    try {
+      const card = await ctx.db.get(pass.loyaltyCardId)
+      if (!card) return
+      const business = await ctx.db.get(card.businessId)
+      if (!business) return
+      const owner = await ctx.db.get(business.ownerId as any)
+      const ownerEmail = (owner as any)?.email
+      if (!ownerEmail) return
+      const location = await ctx.db.get(args.locationId)
+
+      await ctx.scheduler.runAfter(0, internal.notifications.sendRedemptionEmail, {
+        ownerEmail,
+        businessName: business.name,
+        customerName: pass.customerName ?? undefined,
+        rewardDescription: card.rewardDescription,
+        locationName: (location as any)?.name ?? undefined,
+      })
+    } catch (err) {
+      console.error('[redeemReward] failed to schedule notification', err)
+    }
   },
 })

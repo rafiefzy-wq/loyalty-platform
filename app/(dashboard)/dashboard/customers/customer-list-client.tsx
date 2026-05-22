@@ -207,13 +207,13 @@ export function CustomerListClient({ initialLocations }: Props) {
         <div className="flex gap-2">
           <button
             onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${filter === 'all' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${filter === 'all' ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-900/40'}`}
           >
             All
           </button>
           <button
             onClick={() => setFilter('reward_ready')}
-            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${filter === 'reward_ready' ? 'bg-yellow-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${filter === 'reward_ready' ? 'bg-yellow-500 text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-900/40'}`}
           >
             Reward ready
           </button>
@@ -225,7 +225,7 @@ export function CustomerListClient({ initialLocations }: Props) {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
+              <tr className="border-b border-gray-100 bg-gray-50 dark:bg-gray-900/40">
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Name</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3 hidden md:table-cell">Contact</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3 hidden lg:table-cell">Device</th>
@@ -255,7 +255,7 @@ export function CustomerListClient({ initialLocations }: Props) {
                     <tr
                       key={pass.id}
                       onClick={() => setDetailPassId(pass.id)}
-                      className={`cursor-pointer hover:bg-gray-50 transition-colors ${isReady ? 'bg-yellow-50/50' : ''}`}
+                      className={`cursor-pointer hover:bg-gray-50 dark:bg-gray-900/40 transition-colors ${isReady ? 'bg-yellow-50/50' : ''}`}
                     >
                       <td className="px-5 py-4">
                         {pass.customerName ? (
@@ -548,7 +548,7 @@ function CustomerDetailDrawer({
             )}
 
             {/* Stamp progress */}
-            <div className={`rounded-2xl p-4 border ${isReady ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
+            <div className={`rounded-2xl p-4 border ${isReady ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 dark:bg-gray-900/40 border-gray-100'}`}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs uppercase tracking-wider text-gray-500 font-medium">Progress</p>
                 {isReady && <span className="text-xs font-semibold text-yellow-700">🎉 Reward ready</span>}
@@ -575,14 +575,14 @@ function CustomerDetailDrawer({
 
             {/* Meta */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-xl bg-gray-50 p-3">
+              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 p-3">
                 <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Device</p>
                 <div className="flex items-center gap-1.5">
                   {data.pass.device === 'apple' ? <Apple className="w-3.5 h-3.5" /> : <Smartphone className="w-3.5 h-3.5" />}
                   <span className="text-sm font-medium text-gray-800 capitalize">{data.pass.device || 'Unknown'}</span>
                 </div>
               </div>
-              <div className="rounded-xl bg-gray-50 p-3">
+              <div className="rounded-xl bg-gray-50 dark:bg-gray-900/40 p-3">
                 <p className="text-xs text-gray-400 uppercase tracking-wider mb-1">Joined</p>
                 <p className="text-sm font-medium text-gray-800">{timeAgo(data.pass.joinedAt)}</p>
               </div>
@@ -595,7 +595,7 @@ function CustomerDetailDrawer({
                 <span className="text-xs text-gray-400">{data.transactions.length} event{data.transactions.length === 1 ? '' : 's'}</span>
               </div>
               {data.transactions.length === 0 ? (
-                <p className="text-sm text-gray-400 text-center py-6 bg-gray-50 rounded-xl">No activity yet</p>
+                <p className="text-sm text-gray-400 text-center py-6 bg-gray-50 dark:bg-gray-900/40 rounded-xl">No activity yet</p>
               ) : (
                 <ul className="space-y-2 max-h-80 overflow-y-auto">
                   {data.transactions.map((t) => (
