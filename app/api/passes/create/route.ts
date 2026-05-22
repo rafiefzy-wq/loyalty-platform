@@ -12,7 +12,8 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const passUrl = `${appUrl}/pass/${passId}`
 
-    // Trigger Google Wallet creation asynchronously
+    // Trigger Google Wallet creation. Action handles its own errors and returns null
+    // on failure — we still surface any wrapping error here so it shows in Vercel logs.
     let googleWalletUrl: string | null = null
     try {
       const { ConvexHttpClient } = await import('convex/browser')
@@ -21,7 +22,12 @@ export async function POST(request: NextRequest) {
         passId: passId as Id<'customerPasses'>,
         appUrl,
       })
-    } catch {}
+      if (!googleWalletUrl) {
+        console.warn('[passes/create] Google Wallet URL was null — check Convex logs for [google-wallet] entries')
+      }
+    } catch (err: any) {
+      console.error('[passes/create] Google Wallet action threw:', err?.message || err)
+    }
 
     return NextResponse.json({
       passId,

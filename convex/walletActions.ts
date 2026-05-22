@@ -10,16 +10,25 @@ export const createGoogleWalletPass = action({
   },
   handler: async (ctx, args): Promise<string | null> => {
     const data = await ctx.runQuery(api.passes.getPass, { passId: args.passId })
-    if (!data) return null
+    if (!data) {
+      console.error('[google-wallet] pass not found:', args.passId)
+      return null
+    }
     const { pass, card, business } = data
+
+    const serviceAccountB64 = process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_BASE64
+    const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID
+    if (!serviceAccountB64 || !issuerId) {
+      console.error('[google-wallet] missing env vars (GOOGLE_WALLET_SERVICE_ACCOUNT_BASE64 / GOOGLE_WALLET_ISSUER_ID)')
+      return null
+    }
 
     try {
       const { GoogleAuth } = await import('google-auth-library')
       const jwt = await import('jsonwebtoken')
 
-      const credJson = Buffer.from(process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_BASE64!, 'base64').toString('utf8')
+      const credJson = Buffer.from(serviceAccountB64, 'base64').toString('utf8')
       const credentials = JSON.parse(credJson)
-      const issuerId = process.env.GOOGLE_WALLET_ISSUER_ID!
       const classId = `${issuerId}.loyalty_${card._id}`
       const objectId = `${issuerId}.pass_${pass._id}`
       const WALLET_API = 'https://walletobjects.googleapis.com/walletobjects/v1'
@@ -30,7 +39,7 @@ export const createGoogleWalletPass = action({
       })
       const client = await auth.getClient()
 
-      // Create class
+      // Create class (409 = exists already, OK to continue)
       const classBody = {
         id: classId,
         issuerName: (business as any).name,
@@ -47,11 +56,18 @@ export const createGoogleWalletPass = action({
 
       try {
         await (client as any).request({ url: `${WALLET_API}/loyaltyClass`, method: 'POST', data: classBody })
+        console.log('[google-wallet] class created:', classId)
       } catch (e: any) {
-        if (e?.response?.status !== 409) throw e
+        const status = e?.response?.status
+        if (status === 409) {
+          console.log('[google-wallet] class already exists, continuing:', classId)
+        } else {
+          console.error('[google-wallet] class create failed:', status, JSON.stringify(e?.response?.data) || e?.message)
+          throw e
+        }
       }
 
-      // Create object
+      // Create object (or patch if it already exists — happens when revisiting the same pass)
       const objectBody = {
         id: objectId,
         classId,
@@ -62,7 +78,26 @@ export const createGoogleWalletPass = action({
         textModulesData: [{ id: 'business', header: 'Business', body: (business as any).name }],
       }
 
-      await (client as any).request({ url: `${WALLET_API}/loyaltyObject`, method: 'POST', data: objectBody })
+      try {
+        await (client as any).request({ url: `${WALLET_API}/loyaltyObject`, method: 'POST', data: objectBody })
+        console.log('[google-wallet] object created:', objectId)
+      } catch (e: any) {
+        const status = e?.response?.status
+        if (status === 409) {
+          console.log('[google-wallet] object exists, patching:', objectId)
+          await (client as any).request({
+            url: `${WALLET_API}/loyaltyObject/${objectId}`,
+            method: 'PATCH',
+            data: {
+              loyaltyPoints: objectBody.loyaltyPoints,
+              secondaryLoyaltyPoints: objectBody.secondaryLoyaltyPoints,
+            },
+          })
+        } else {
+          console.error('[google-wallet] object create failed:', status, JSON.stringify(e?.response?.data) || e?.message)
+          throw e
+        }
+      }
 
       // Build JWT save link
       const claims = {
@@ -75,15 +110,19 @@ export const createGoogleWalletPass = action({
       }
       const token = (jwt as any).sign(claims, credentials.private_key, { algorithm: 'RS256' })
 
-      // Save googlePassId back to the pass
+      // Save googlePassId back to the pass so the regular /pass/[id] route can rebuild the link
       await ctx.runMutation(api.passes.updateGooglePassId, {
         passId: args.passId,
         googlePassId: objectId,
         passUrl: `${args.appUrl}/pass/${pass._id}`,
       })
 
-      return `https://pay.google.com/gp/v/save/${token}`
-    } catch {
+      const saveUrl = `https://pay.google.com/gp/v/save/${token}`
+      console.log('[google-wallet] save URL ready')
+      return saveUrl
+    } catch (err: any) {
+      console.error('[google-wallet] createGoogleWalletPass failed:', err?.message || err)
+      console.error('[google-wallet] details:', JSON.stringify(err?.response?.data) || err?.stack || 'no extra detail')
       return null
     }
   },
