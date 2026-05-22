@@ -58,6 +58,9 @@ export const getPassDetail = query({
       pass: {
         id: pass._id,
         customerName: pass.customerName ?? null,
+        customerEmail: pass.customerEmail ?? null,
+        customerPhone: pass.customerPhone ?? null,
+        avatarUrl: pass.avatarUrl ?? null,
         stampCount: pass.stampCount,
         device: pass.customerDevice ?? null,
         joinedAt: pass._creationTime,
@@ -96,7 +99,11 @@ export const createPass = mutation({
 })
 
 export const createNamedPass = mutation({
-  args: { customerName: v.string() },
+  args: {
+    customerName: v.string(),
+    customerEmail: v.optional(v.string()),
+    customerPhone: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx)
     if (!userId) throw new Error('Unauthorized')
@@ -115,9 +122,105 @@ export const createNamedPass = mutation({
       stampCount: 0,
       applePassSerial: crypto.randomUUID(),
       customerName: name,
+      customerEmail: args.customerEmail?.trim() || undefined,
+      customerPhone: args.customerPhone?.trim() || undefined,
     })
 
     return { passId, cardId: card._id }
+  },
+})
+
+// Verify the auth'd user owns the business this pass belongs to.
+async function assertOwnsPass(ctx: any, passId: string) {
+  const userId = await getAuthUserId(ctx)
+  if (!userId) throw new Error('Unauthorized')
+  const pass = await ctx.db.get(passId)
+  if (!pass) throw new Error('Pass not found')
+  const card = await ctx.db.get(pass.loyaltyCardId)
+  if (!card) throw new Error('Card not found')
+  const business = await ctx.db.get(card.businessId)
+  if (!business || business.ownerId !== userId) throw new Error('Forbidden')
+  return { pass, card, business, userId }
+}
+
+export const updateCustomer = mutation({
+  args: {
+    passId: v.id('customerPasses'),
+    customerName: v.optional(v.string()),
+    customerEmail: v.optional(v.string()),
+    customerPhone: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await assertOwnsPass(ctx, args.passId)
+    const patch: Record<string, any> = {}
+    if (args.customerName !== undefined) {
+      const n = args.customerName.trim()
+      patch.customerName = n || undefined
+    }
+    if (args.customerEmail !== undefined) {
+      const e = args.customerEmail.trim()
+      patch.customerEmail = e || undefined
+    }
+    if (args.customerPhone !== undefined) {
+      const p = args.customerPhone.trim()
+      patch.customerPhone = p || undefined
+    }
+    if (args.avatarUrl !== undefined) {
+      patch.avatarUrl = args.avatarUrl.trim() || undefined
+    }
+    await ctx.db.patch(args.passId, patch)
+  },
+})
+
+export const deleteCustomer = mutation({
+  args: { passId: v.id('customerPasses') },
+  handler: async (ctx, args) => {
+    await assertOwnsPass(ctx, args.passId)
+    // Delete all associated transactions first
+    const transactions = await ctx.db
+      .query('stampTransactions')
+      .withIndex('by_customer_pass', q => q.eq('customerPassId', args.passId))
+      .collect()
+    for (const t of transactions) {
+      await ctx.db.delete(t._id)
+    }
+    await ctx.db.delete(args.passId)
+  },
+})
+
+// Realtime version of listPassesForBusiness for the auth'd owner.
+// Used in client components with useQuery for live updates.
+export const listMyCustomers = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx)
+    if (!userId) return null
+    const business = await ctx.db.query('businesses').withIndex('by_owner', q => q.eq('ownerId', userId)).first()
+    if (!business) return null
+    const card = await ctx.db.query('loyaltyCards').withIndex('by_business', q => q.eq('businessId', business._id)).filter(q => q.eq(q.field('isActive'), true)).first()
+    if (!card) return { passes: [], stampGoal: 0, rewardDescription: '' }
+    const passes = await ctx.db
+      .query('customerPasses')
+      .withIndex('by_loyalty_card', q => q.eq('loyaltyCardId', card._id))
+      .order('desc')
+      .collect()
+    return {
+      passes: passes.map(p => ({
+        id: p._id,
+        stampCount: p.stampCount,
+        customerName: p.customerName ?? null,
+        customerEmail: p.customerEmail ?? null,
+        customerPhone: p.customerPhone ?? null,
+        avatarUrl: p.avatarUrl ?? null,
+        device: p.customerDevice ?? null,
+        joinedAt: p._creationTime,
+        lastVisitedAt: p.lastVisitedAt ?? null,
+        locationId: p.locationId ?? null,
+      })),
+      stampGoal: card.stampGoal,
+      rewardDescription: card.rewardDescription,
+    }
   },
 })
 

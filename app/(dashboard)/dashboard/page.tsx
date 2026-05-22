@@ -4,7 +4,7 @@ import { api } from '@/convex/_generated/api'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Users, TrendingUp, Gift, QrCode, ArrowRight, Smartphone, Watch } from 'lucide-react'
+import { Users, TrendingUp, Gift, QrCode, ArrowRight, Smartphone, Watch, MapPin, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { QuickEditRewardButton } from './quick-edit-reward'
 import QRCode from 'qrcode'
@@ -18,10 +18,11 @@ export default async function DashboardPage() {
   const business = await fetchQuery(api.businesses.getMyBusiness, {}, { token })
   if (!business) redirect('/onboarding')
 
-  const [stats, activeCard, recentPasses] = await Promise.all([
+  const [stats, activeCard, recentPasses, locationStats] = await Promise.all([
     fetchQuery(api.businesses.getStats, {}, { token }),
     fetchQuery(api.passes.getActiveCardForBusiness, {}, { token }),
     fetchQuery(api.passes.getRecentPasses, { limit: 8 }, { token }),
+    fetchQuery(api.locations.getLocationStats, {}, { token }),
   ])
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://loyalty-platform-pearl.vercel.app'
@@ -62,6 +63,7 @@ export default async function DashboardPage() {
         <p className="text-gray-500 text-sm mt-1">Welcome back to {business.name}</p>
       </div>
 
+      {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statCards.map((s) => (
           <Card key={s.label} className="border-0 shadow-sm">
@@ -76,6 +78,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
+      {/* QR + Recent customers */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="border-0 shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between">
@@ -162,6 +165,57 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Multi-location breakdown */}
+      {locationStats.length > 0 && (
+        <Card className="border-0 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-base flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-indigo-600" />
+                Location breakdown
+              </CardTitle>
+              <p className="text-xs text-gray-500 mt-0.5">Stamps and redemptions per location</p>
+            </div>
+            <Link href="/dashboard/settings" className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
+              Manage locations <ArrowRight className="w-3 h-3" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {locationStats.map((loc) => (
+                <div key={loc.id} className="rounded-xl border border-gray-100 p-4 hover:border-indigo-200 transition-colors">
+                  <div className="flex items-start justify-between mb-2.5">
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900 truncate">{loc.name}</p>
+                      {loc.city && <p className="text-xs text-gray-400">{loc.city}</p>}
+                    </div>
+                    {loc.recentRedemptions > 0 && (
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-medium text-yellow-700 bg-yellow-100 px-1.5 py-0.5 rounded-full"
+                        title={`${loc.recentRedemptions} reward(s) redeemed this week`}
+                      >
+                        <AlertCircle className="w-2.5 h-2.5" />
+                        {loc.recentRedemptions} this week
+                      </span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400">Stamps</p>
+                      <p className="text-lg font-bold text-gray-900 tabular-nums">{loc.stamps}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-gray-400">Redeemed</p>
+                      <p className="text-lg font-bold text-yellow-600 tabular-nums">{loc.redemptions}</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

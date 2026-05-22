@@ -68,6 +68,9 @@ export default defineSchema({
     passUrl: v.optional(v.string()),
     customerDevice: v.optional(v.string()),
     customerName: v.optional(v.string()),
+    customerEmail: v.optional(v.string()),
+    customerPhone: v.optional(v.string()),
+    avatarUrl: v.optional(v.string()),
     lastVisitedAt: v.optional(v.number()),
   })
     .index('by_loyalty_card', ['loyaltyCardId'])

@@ -1,50 +1,88 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import type { Id } from '@/convex/_generated/dataModel'
-import type { CustomerPass, LoyaltyCard, Location } from '@/lib/types'
 import { toast } from '@/lib/hooks/use-toast'
-import { Search, Gift, Apple, Smartphone, User, UserPlus, X, Stamp, Clock, MapPin } from 'lucide-react'
+import {
+  Search, Gift, Apple, Smartphone, User, UserPlus, X, Stamp, Clock, MapPin,
+  Pencil, Trash2, Download, Mail, Phone, Loader2, AlertTriangle,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Card } from '@/components/ui/card'
 
-interface Props {
-  passes: CustomerPass[]
-  loyaltyCard: LoyaltyCard | null
-  locations: Location[]
+interface LocationOption {
+  id: string
+  name: string
 }
 
-export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
+interface Props {
+  initialLocations: LocationOption[]
+}
+
+type LivePass = {
+  id: string
+  stampCount: number
+  customerName: string | null
+  customerEmail: string | null
+  customerPhone: string | null
+  avatarUrl: string | null
+  device: string | null
+  joinedAt: number
+  lastVisitedAt: number | null
+  locationId: string | null
+}
+
+export function CustomerListClient({ initialLocations }: Props) {
+  // === Live realtime data ===
+  const data = useQuery(api.passes.listMyCustomers)
+  const passes: LivePass[] = data?.passes ?? []
+  const stampGoal = data?.stampGoal ?? 0
+  const rewardDescription = data?.rewardDescription ?? ''
+  const isLoading = data === undefined
+
+  // === UI state ===
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'reward_ready'>('all')
   const [redeemingId, setRedeemingId] = useState<string | null>(null)
 
-  // Add customer modal
+  // Add modal
   const [addOpen, setAddOpen] = useState(false)
   const [newName, setNewName] = useState('')
+  const [newEmail, setNewEmail] = useState('')
+  const [newPhone, setNewPhone] = useState('')
   const [adding, setAdding] = useState(false)
-  const createNamedPass = useMutation(api.passes.createNamedPass)
 
   // Detail drawer
   const [detailPassId, setDetailPassId] = useState<string | null>(null)
 
-  const filtered = passes.filter((p) => {
-    const s = search.toLowerCase()
-    const matchSearch =
-      !s ||
-      p.id.toLowerCase().includes(s) ||
-      (p.customer_name && p.customer_name.toLowerCase().includes(s))
-    const matchFilter = filter === 'all' || (filter === 'reward_ready' && p.stamp_count >= (loyaltyCard?.stamp_goal || 999))
-    return matchSearch && matchFilter
-  })
+  const createNamedPass = useMutation(api.passes.createNamedPass)
+
+  const filtered = useMemo(() => {
+    return passes.filter((p) => {
+      const s = search.toLowerCase().trim()
+      const matchSearch =
+        !s ||
+        p.id.toLowerCase().includes(s) ||
+        (p.customerName && p.customerName.toLowerCase().includes(s)) ||
+        (p.customerEmail && p.customerEmail.toLowerCase().includes(s)) ||
+        (p.customerPhone && p.customerPhone.includes(s))
+      const matchFilter = filter === 'all' || (filter === 'reward_ready' && p.stampCount >= (stampGoal || 999))
+      return matchSearch && matchFilter
+    })
+  }, [passes, search, filter, stampGoal])
+
+  const rewardReadyCount = useMemo(
+    () => passes.filter((p) => p.stampCount >= (stampGoal || 999)).length,
+    [passes, stampGoal]
+  )
 
   async function handleRedeem(passId: string, e?: React.MouseEvent) {
     e?.stopPropagation()
-    if (!locations[0]) {
+    if (!initialLocations[0]) {
       toast({ title: 'No location configured', variant: 'destructive' })
       return
     }
@@ -52,11 +90,11 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
     const res = await fetch('/api/stamps/redeem', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passId, locationId: locations[0].id }),
+      body: JSON.stringify({ passId, locationId: initialLocations[0].id }),
     })
     if (res.ok) {
       toast({ title: 'Reward redeemed!', variant: 'success' })
-      window.location.reload()
+      // useQuery auto-updates — no reload needed
     } else {
       const { error } = await res.json().catch(() => ({ error: 'Failed' }))
       toast({ title: error, variant: 'destructive' })
@@ -72,36 +110,85 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
     }
     setAdding(true)
     try {
-      await createNamedPass({ customerName: trimmed })
-      toast({ title: `"${trimmed}" added to Customers`, variant: 'success' })
+      await createNamedPass({
+        customerName: trimmed,
+        customerEmail: newEmail.trim() || undefined,
+        customerPhone: newPhone.trim() || undefined,
+      })
+      toast({ title: `"${trimmed}" added`, variant: 'success' })
       setAddOpen(false)
-      setNewName('')
-      window.location.reload()
+      setNewName(''); setNewEmail(''); setNewPhone('')
+      // useQuery auto-updates list
     } catch (err) {
-      toast({ title: (err as Error).message || 'Could not add customer', variant: 'destructive' })
+      toast({ title: (err as Error).message || 'Could not add', variant: 'destructive' })
     } finally {
       setAdding(false)
     }
   }
 
-  const rewardReadyCount = passes.filter((p) => p.stamp_count >= (loyaltyCard?.stamp_goal || 999)).length
+  function exportCSV() {
+    if (passes.length === 0) {
+      toast({ title: 'No customers to export', variant: 'destructive' })
+      return
+    }
+    const rows = [
+      ['Pass ID', 'Name', 'Email', 'Phone', 'Device', 'Stamps', 'Stamp Goal', 'Joined', 'Last Visit'],
+      ...passes.map(p => [
+        p.id,
+        p.customerName ?? '',
+        p.customerEmail ?? '',
+        p.customerPhone ?? '',
+        p.device ?? '',
+        p.stampCount.toString(),
+        stampGoal.toString(),
+        new Date(p.joinedAt).toISOString(),
+        p.lastVisitedAt ? new Date(p.lastVisitedAt).toISOString() : '',
+      ]),
+    ]
+    const csv = rows.map(r => r.map(cell => {
+      const v = String(cell)
+      return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v
+    }).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast({ title: `Exported ${passes.length} customers`, variant: 'success' })
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-          <p className="text-gray-500 text-sm mt-1">{passes.length} total passes issued</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {isLoading ? 'Loading…' : `${passes.length} total ${passes.length === 1 ? 'pass' : 'passes'} issued`}
+            {!isLoading && passes.length > 0 && (
+              <span className="ml-2 inline-flex items-center gap-1 text-xs text-green-600 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                Live
+              </span>
+            )}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           {rewardReadyCount > 0 && (
             <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-2">
-              <span className="text-yellow-600 text-sm font-semibold">🎉 {rewardReadyCount} reward{rewardReadyCount > 1 ? 's' : ''} ready</span>
+              <span className="text-yellow-600 text-sm font-semibold">🎉 {rewardReadyCount} ready</span>
             </div>
           )}
+          <Button variant="outline" onClick={exportCSV} className="gap-1.5">
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Export CSV</span>
+          </Button>
           <Button variant="primary" onClick={() => setAddOpen(true)} className="gap-1.5">
             <UserPlus className="w-4 h-4" />
-            Add customer
+            <span className="hidden sm:inline">Add customer</span>
           </Button>
         </div>
       </div>
@@ -111,7 +198,7 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Search by name or pass ID…"
+            placeholder="Search by name, email, phone, or pass ID…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -140,24 +227,30 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50">
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Name</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Pass ID</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Device</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3 hidden md:table-cell">Contact</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3 hidden lg:table-cell">Device</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Stamps</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Last Visit</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3 hidden sm:table-cell">Last Visit</th>
                 <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Status</th>
-                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3">Action</th>
+                <th className="text-left text-xs font-medium text-gray-500 px-5 py-3"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtered.length === 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={7} className="text-center py-12">
+                    <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-gray-400 text-sm">
-                    No customers found
+                    {passes.length === 0 ? 'No customers yet — share your QR code or add one manually' : 'No customers match your filters'}
                   </td>
                 </tr>
               ) : (
                 filtered.map((pass) => {
-                  const isReady = pass.stamp_count >= (loyaltyCard?.stamp_goal || 999)
+                  const isReady = pass.stampCount >= (stampGoal || 999)
                   return (
                     <tr
                       key={pass.id}
@@ -165,12 +258,12 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
                       className={`cursor-pointer hover:bg-gray-50 transition-colors ${isReady ? 'bg-yellow-50/50' : ''}`}
                     >
                       <td className="px-5 py-4">
-                        {pass.customer_name ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-700">
-                              {pass.customer_name.charAt(0).toUpperCase()}
+                        {pass.customerName ? (
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-700 flex-shrink-0">
+                              {pass.customerName.charAt(0).toUpperCase()}
                             </div>
-                            <span className="text-sm font-medium text-gray-900">{pass.customer_name}</span>
+                            <span className="text-sm font-medium text-gray-900">{pass.customerName}</span>
                           </div>
                         ) : (
                           <div className="flex items-center gap-2 text-gray-400">
@@ -179,39 +272,37 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
                           </div>
                         )}
                       </td>
-                      <td className="px-5 py-4">
-                        <span className="font-mono text-sm text-gray-700">{pass.id.slice(0, 12)}…</span>
+                      <td className="px-5 py-4 hidden md:table-cell">
+                        <div className="text-xs text-gray-500 space-y-0.5">
+                          {pass.customerEmail && <div className="flex items-center gap-1"><Mail className="w-3 h-3" />{pass.customerEmail}</div>}
+                          {pass.customerPhone && <div className="flex items-center gap-1"><Phone className="w-3 h-3" />{pass.customerPhone}</div>}
+                          {!pass.customerEmail && !pass.customerPhone && <span className="text-gray-300">—</span>}
+                        </div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="px-5 py-4 hidden lg:table-cell">
                         <div className="flex items-center gap-1.5">
-                          {pass.customer_device === 'apple' ? (
-                            <Apple className="w-4 h-4 text-gray-600" />
-                          ) : (
-                            <Smartphone className="w-4 h-4 text-gray-600" />
-                          )}
-                          <span className="text-sm text-gray-600 capitalize">{pass.customer_device || '—'}</span>
+                          {pass.device === 'apple' ? <Apple className="w-4 h-4 text-gray-600" /> : <Smartphone className="w-4 h-4 text-gray-600" />}
+                          <span className="text-sm text-gray-600 capitalize">{pass.device || '—'}</span>
                         </div>
                       </td>
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
-                          <div className="w-24 bg-gray-200 rounded-full h-1.5">
+                          <div className="w-20 bg-gray-200 rounded-full h-1.5">
                             <div
-                              className="h-1.5 rounded-full transition-all"
+                              className="h-1.5 rounded-full transition-all duration-500"
                               style={{
-                                width: `${Math.min((pass.stamp_count / (loyaltyCard?.stamp_goal || 1)) * 100, 100)}%`,
+                                width: `${Math.min((pass.stampCount / (stampGoal || 1)) * 100, 100)}%`,
                                 backgroundColor: isReady ? '#f59e0b' : '#6366f1',
                               }}
                             />
                           </div>
-                          <span className="text-sm font-semibold tabular-nums text-gray-900">
-                            {pass.stamp_count}/{loyaltyCard?.stamp_goal}
+                          <span className="text-sm font-semibold tabular-nums text-gray-900 whitespace-nowrap">
+                            {pass.stampCount}/{stampGoal}
                           </span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-sm text-gray-500">
-                        {pass.last_visited_at
-                          ? new Date(pass.last_visited_at).toLocaleDateString()
-                          : '—'}
+                      <td className="px-5 py-4 text-sm text-gray-500 hidden sm:table-cell">
+                        {pass.lastVisitedAt ? new Date(pass.lastVisitedAt).toLocaleDateString() : '—'}
                       </td>
                       <td className="px-5 py-4">
                         {isReady ? (
@@ -234,7 +325,7 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
                             className="gap-1.5"
                           >
                             <Gift className="w-3.5 h-3.5" />
-                            {redeemingId === pass.id ? 'Redeeming…' : 'Confirm'}
+                            {redeemingId === pass.id ? '…' : 'Redeem'}
                           </Button>
                         )}
                       </td>
@@ -250,12 +341,12 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
       {/* Add Customer Modal */}
       {addOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setAddOpen(false)}
           role="dialog"
           aria-modal="true"
         >
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl relative animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setAddOpen(false)}
               aria-label="Close"
@@ -268,19 +359,21 @@ export function CustomerListClient({ passes, loyaltyCard, locations }: Props) {
                 <UserPlus className="w-5 h-5 text-indigo-600" />
               </div>
               <h2 className="text-lg font-bold text-gray-900">Add a customer</h2>
-              <p className="text-sm text-gray-500 mt-0.5">Create a named loyalty pass for a customer.</p>
+              <p className="text-sm text-gray-500 mt-0.5">Create a named loyalty pass. Contact info is optional.</p>
             </div>
-            <div className="space-y-1.5 mb-5">
-              <Label htmlFor="new-customer-name">Customer name</Label>
-              <Input
-                id="new-customer-name"
-                placeholder="e.g. John Doe"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                maxLength={60}
-                autoFocus
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCustomer() }}
-              />
+            <div className="space-y-3 mb-5">
+              <div className="space-y-1.5">
+                <Label htmlFor="new-name">Name <span className="text-red-500">*</span></Label>
+                <Input id="new-name" placeholder="John Doe" value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={60} autoFocus />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="new-email">Email</Label>
+                <Input id="new-email" type="email" placeholder="john@example.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} maxLength={100} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="new-phone">Phone</Label>
+                <Input id="new-phone" type="tel" placeholder="+62 812 3456 7890" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} maxLength={30} />
+              </div>
             </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setAddOpen(false)} className="flex-1">Cancel</Button>
@@ -317,6 +410,57 @@ function CustomerDetailDrawer({
   redeeming: boolean
 }) {
   const data = useQuery(api.passes.getPassDetail, { passId })
+  const updateCustomer = useMutation(api.passes.updateCustomer)
+  const deleteCustomer = useMutation(api.passes.deleteCustomer)
+
+  const [editMode, setEditMode] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  // Local edit form state (initialized from data when entering edit mode)
+  const [editName, setEditName] = useState('')
+  const [editEmail, setEditEmail] = useState('')
+  const [editPhone, setEditPhone] = useState('')
+
+  function startEdit() {
+    if (!data) return
+    setEditName(data.pass.customerName ?? '')
+    setEditEmail(data.pass.customerEmail ?? '')
+    setEditPhone(data.pass.customerPhone ?? '')
+    setEditMode(true)
+  }
+
+  async function handleSaveEdit() {
+    setSavingEdit(true)
+    try {
+      await updateCustomer({
+        passId,
+        customerName: editName,
+        customerEmail: editEmail,
+        customerPhone: editPhone,
+      })
+      toast({ title: 'Customer updated', variant: 'success' })
+      setEditMode(false)
+    } catch (err) {
+      toast({ title: (err as Error).message || 'Update failed', variant: 'destructive' })
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    try {
+      await deleteCustomer({ passId })
+      toast({ title: 'Customer deleted', variant: 'success' })
+      onClose()
+    } catch (err) {
+      toast({ title: (err as Error).message || 'Delete failed', variant: 'destructive' })
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   function timeAgo(ms: number) {
     const diff = Date.now() - ms
@@ -333,43 +477,75 @@ function CustomerDetailDrawer({
   const stampCount = data?.pass.stampCount ?? 0
   const stampGoal = data?.card.stampGoal ?? 0
   const isReady = stampCount >= stampGoal && stampGoal > 0
+  const email = data?.pass.customerEmail ?? undefined
+  const phone = data?.pass.customerPhone ?? undefined
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-50 flex justify-end animate-in fade-in duration-200"
       onClick={onClose}
       role="dialog"
       aria-modal="true"
-      aria-labelledby="drawer-title"
     >
       <div className="absolute inset-0 bg-black/40" />
       <div
-        className="relative bg-white w-full sm:w-[420px] h-full overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-200"
+        className="relative bg-white w-full sm:w-[460px] h-full overflow-y-auto shadow-2xl animate-in slide-in-from-right duration-300"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between">
-          <h2 id="drawer-title" className="font-semibold text-gray-900">Customer detail</h2>
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-5 py-4 flex items-center justify-between z-10">
+          <h2 className="font-semibold text-gray-900">Customer detail</h2>
           <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {!data ? (
-          <div className="p-10 text-center text-sm text-gray-400">Loading…</div>
+          <div className="p-10 text-center">
+            <Loader2 className="w-5 h-5 animate-spin mx-auto text-gray-400" />
+          </div>
         ) : (
           <div className="p-5 space-y-5">
-            {/* Identity */}
-            <div className="flex items-center gap-3">
-              <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-xl font-bold text-indigo-700">
-                {data.pass.customerName ? data.pass.customerName.charAt(0).toUpperCase() : '?'}
+            {/* Identity / Edit */}
+            {!editMode ? (
+              <div className="flex items-start gap-3">
+                <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center text-xl font-bold text-indigo-700">
+                  {data.pass.customerName ? data.pass.customerName.charAt(0).toUpperCase() : '?'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-lg font-bold text-gray-900 truncate">
+                    {data.pass.customerName || <span className="italic text-gray-400">Anonymous</span>}
+                  </p>
+                  {email && <p className="text-xs text-gray-600 flex items-center gap-1 mt-0.5"><Mail className="w-3 h-3" />{email}</p>}
+                  {phone && <p className="text-xs text-gray-600 flex items-center gap-1 mt-0.5"><Phone className="w-3 h-3" />{phone}</p>}
+                  <p className="text-xs text-gray-400 font-mono truncate mt-1">{data.pass.id}</p>
+                </div>
+                <button onClick={startEdit} aria-label="Edit" className="p-1.5 rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50">
+                  <Pencil className="w-4 h-4" />
+                </button>
               </div>
-              <div className="min-w-0">
-                <p className="text-lg font-bold text-gray-900 truncate">
-                  {data.pass.customerName || <span className="italic text-gray-400">Anonymous</span>}
-                </p>
-                <p className="text-xs text-gray-500 font-mono truncate">{data.pass.id}</p>
+            ) : (
+              <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-4 space-y-3">
+                <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wider">Edit customer</p>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-name" className="text-xs">Name</Label>
+                  <Input id="edit-name" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Name" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-email" className="text-xs">Email</Label>
+                  <Input id="edit-email" type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} placeholder="email@example.com" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="edit-phone" className="text-xs">Phone</Label>
+                  <Input id="edit-phone" type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="+62…" />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" onClick={() => setEditMode(false)} className="flex-1">Cancel</Button>
+                  <Button variant="primary" size="sm" onClick={handleSaveEdit} disabled={savingEdit} className="flex-1">
+                    {savingEdit ? 'Saving…' : 'Save'}
+                  </Button>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Stamp progress */}
             <div className={`rounded-2xl p-4 border ${isReady ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-100'}`}>
@@ -382,7 +558,7 @@ function CustomerDetailDrawer({
               </p>
               <div className="mt-2 w-full bg-white rounded-full h-2 overflow-hidden">
                 <div
-                  className="h-2 rounded-full transition-all"
+                  className="h-2 rounded-full transition-all duration-500"
                   style={{
                     width: `${Math.min((stampCount / Math.max(stampGoal, 1)) * 100, 100)}%`,
                     backgroundColor: isReady ? '#f59e0b' : '#6366f1',
@@ -392,7 +568,7 @@ function CustomerDetailDrawer({
               {isReady && (
                 <Button variant="primary" onClick={onRedeem} disabled={redeeming} className="w-full mt-3 gap-1.5">
                   <Gift className="w-4 h-4" />
-                  {redeeming ? 'Redeeming…' : `Redeem reward (${data.card.rewardDescription})`}
+                  {redeeming ? 'Redeeming…' : `Redeem (${data.card.rewardDescription})`}
                 </Button>
               )}
             </div>
@@ -439,6 +615,34 @@ function CustomerDetailDrawer({
                     </li>
                   ))}
                 </ul>
+              )}
+            </div>
+
+            {/* Danger zone */}
+            <div className="pt-2 border-t border-gray-100">
+              {!confirmDelete ? (
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full text-xs text-red-600 hover:text-red-700 hover:bg-red-50 py-2 rounded-lg flex items-center justify-center gap-1.5"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete this customer
+                </button>
+              ) : (
+                <div className="rounded-xl bg-red-50 border border-red-200 p-3 space-y-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-red-700">
+                      This will permanently delete this customer and all their stamp history. This cannot be undone.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)} className="flex-1">Cancel</Button>
+                    <Button variant="destructive" size="sm" onClick={handleDelete} disabled={deleting} className="flex-1">
+                      {deleting ? 'Deleting…' : 'Delete forever'}
+                    </Button>
+                  </div>
+                </div>
               )}
             </div>
           </div>
