@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuthActions } from '@convex-dev/auth/react'
-import { useMutation } from 'convex/react'
+import { useConvexAuth, useMutation } from 'convex/react'
 import { api } from '@/convex/_generated/api'
 import { toast } from '@/lib/hooks/use-toast'
 import { Button } from '@/components/ui/button'
@@ -66,7 +66,12 @@ function OnboardingInner() {
   const searchParams = useSearchParams()
   const resume = searchParams.get('resume')
   const { signIn } = useAuthActions()
+  const { isAuthenticated } = useConvexAuth()
   const completeOnboarding = useMutation(api.businesses.completeOnboarding)
+
+  // Mirror auth state into a ref so the handler can poll it without stale closures
+  const authRef = useRef(isAuthenticated)
+  useEffect(() => { authRef.current = isAuthenticated }, [isAuthenticated])
 
   const [step, setStep] = useState(0)
   const [saving, setSaving] = useState(false)
@@ -140,7 +145,7 @@ function OnboardingInner() {
     }
     setSaving(true)
     try {
-      // Sign up with Convex Auth (no email confirmation required)
+      // 1. Sign up with Convex Auth (no email confirmation required)
       await signIn('password', {
         email: signUpEmail,
         password: signUpPassword,
@@ -148,9 +153,20 @@ function OnboardingInner() {
         flow: 'signUp',
       })
 
-      // Save business data via Convex mutation (user is now authenticated)
+      // 2. signIn() resolves once the auth API returns tokens, but the Convex
+      //    WebSocket client needs a moment to receive the new auth state.
+      //    Poll the ref until the client reports authenticated (up to ~4s),
+      //    then fall back to retry-with-backoff if the mutation still races.
+      const start = Date.now()
+      while (!authRef.current && Date.now() - start < 4000) {
+        await new Promise((r) => setTimeout(r, 100))
+      }
+
+      // 3. Save business data via Convex mutation. Retry a few times if we
+      //    still hit "Unauthorized" — the auth state can lag briefly even
+      //    after the ref flips on some slower connections.
       const data = wizardData()
-      const { cardId } = await completeOnboarding({
+      const mutationArgs = {
         businessName: data.businessName,
         businessType: data.businessType,
         isMultiLocation: data.isMultiLocation,
@@ -164,7 +180,24 @@ function OnboardingInner() {
         fontChoice: data.fontChoice,
         stampGoal: data.stampGoal,
         rewardDescription: data.rewardDescription,
-      })
+      }
+
+      let cardId: string | undefined
+      let lastErr: unknown
+      for (let attempt = 0; attempt < 4; attempt++) {
+        try {
+          const result = await completeOnboarding(mutationArgs)
+          cardId = result.cardId
+          break
+        } catch (err) {
+          lastErr = err
+          const msg = (err as Error).message || ''
+          // Only retry on auth-timing errors; anything else is a real bug
+          if (!/unauthorized|not authenticated|no identity/i.test(msg)) throw err
+          await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+        }
+      }
+      if (!cardId) throw lastErr
 
       const appUrl = window.location.origin
       const samplePassUrl = `${appUrl}/pass/new?card=${cardId}`
