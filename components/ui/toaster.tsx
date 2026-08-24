@@ -1,5 +1,7 @@
 'use client'
 
+'use client'
+
 import { useToast } from '@/lib/hooks/use-toast'
 import {
   Toast,
