@@ -60,14 +60,14 @@ export default function HomePage() {
           <div className="inline-flex items-center gap-2 bg-indigo-50 text-indigo-700 text-sm font-medium px-3 py-1.5 rounded-full mb-6">
             <Zap className="w-3.5 h-3.5" /> Live in under 2 minutes
           </div>
-          <h1 className="text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight tracking-tight mb-6">
+          <h1 className="text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight tracking-tight mb-6 text-center">
             Loyalty cards your customers{' '}
             <span className="text-indigo-600">actually keep</span>
           </h1>
-          <p className="text-xl text-gray-500 leading-relaxed mb-8">
+          <p className="text-xl font-semibold text-gray-500 leading-relaxed mb-8 text-center">
             Create digital stamp cards that live natively inside Apple Wallet and Google Wallet. No app download. No account creation. Just scan and collect.
           </p>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 text-left">
             <Link
               href="/onboarding"
               className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white text-base font-semibold px-8 py-4 rounded-2xl hover:bg-indigo-700 transition-colors shadow-lg shadow-indigo-200"
